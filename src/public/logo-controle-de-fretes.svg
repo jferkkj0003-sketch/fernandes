@@ -7,5 +7,5 @@
   <circle cx="39" cy="68" r="7" fill="#16324F" stroke="#fff" stroke-width="3"/>
   <circle cx="73" cy="68" r="7" fill="#16324F" stroke="#fff" stroke-width="3"/>
   <path d="m29 78 8 4 7-4 8 4 8-4 8 4 8-4" stroke="#B8F0D7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="112" y="59" fill="#16324F" font-family="Manrope, Arial, sans-serif" font-size="27" font-weight="800" letter-spacing="-.8">Controle de Fretes</text>
+  <text x="112" y="59" fill="#16324F" font-family="Manrope, Arial, sans-serif" font-size="27" font-weight="800" letter-spacing="-.8">Gestão de Frete</text>
 </svg>
