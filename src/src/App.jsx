@@ -845,7 +845,7 @@ export default function App() {
         await deleteCloudClosure(closure.id);
         const data = await loadCloudData();
         setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
-        setNotice(closure.status === 'Solicitado' ? 'Fechamento reaberto. Os tickets voltaram para abertos; o e-mail enviado permanece no histórico.' : 'Fechamento excluído da nuvem. Os tickets voltaram para abertos.');
+        setNotice(closure.status === 'Solicitado' ? 'Fechamento reaberto. Os tickets voltaram para abertos e o fechamento saiu da lista de solicitações.' : 'Fechamento excluído da nuvem. Os tickets voltaram para abertos.');
         setClosureToDelete(null);
         setDeletePassword('');
         window.setTimeout(() => setNotice(''), 6000);
@@ -1462,7 +1462,7 @@ function AdminDeleteModal({ closure, password, setPassword, message, busy, onClo
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
     <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title">
       <div className="panel-heading"><div><p className="eyebrow">CONFIRMAÇÃO DO ADMINISTRADOR</p><h2 id="admin-delete-title">{alreadyRequested ? 'Reabrir tickets do fechamento' : 'Excluir fechamento'} {closure.number}?</h2><p>{closure.driver} · {formatDate(closure.start)} a {formatDate(closure.end)}</p></div><button className="icon-button" aria-label="Fechar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
-      <p className="admin-delete-copy">{alreadyRequested ? 'Os tickets voltarão para abertos para você gerar um novo fechamento. O registro do e-mail enviado permanece no histórico.' : 'Os tickets voltarão para a lista de abertos e poderão entrar em outro fechamento.'} Essa ação não pode ser desfeita.</p>
+      <p className="admin-delete-copy">{alreadyRequested ? 'Ao confirmar, os tickets voltarão para abertos e este fechamento sairá da lista de solicitações.' : 'Os tickets voltarão para a lista de abertos e poderão entrar em outro fechamento.'} Essa ação não pode ser desfeita.</p>
       <form className="admin-delete-form" onSubmit={onConfirm}>
         <label>Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus /></label>
         <small>A senha é validada pelo Supabase e não fica salva no aplicativo.</small>
