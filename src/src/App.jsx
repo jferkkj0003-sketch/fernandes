@@ -93,7 +93,7 @@ function buildClosureReportPdf(closure) {
     commands = [];
     y = 790;
     text('FECHAMENTO DE FRETE', 230, y, 16, true); y -= 20;
-    text('Controle de Fretes', 230, y, 9); text(`Fechamento ${closure.number || '001'}`, 430, y, 10, true); y -= 12;
+    text('Gestão de Frete', 230, y, 9); text(`Fechamento ${closure.number || '001'}`, 430, y, 10, true); y -= 12;
     y -= 18;
     text(`Motorista: ${driver.fullName || closure.driver}`, 40, y, 10, true);
     text(`Período: ${formatDate(closure.start)} a ${formatDate(closure.end)}`, 330, y, 9); y -= 12;
@@ -244,7 +244,7 @@ function openClosurePdf(closure, setNotice, setCloudBusy) {
     window.alert('O navegador bloqueou a nova aba do PDF. Permita pop-ups para este aplicativo e tente novamente.');
     return;
   }
-  tab.document.title = `Fechamento ${closure.number} · Controle de Fretes`;
+  tab.document.title = `Fechamento ${closure.number} · Gestão de Frete`;
   tab.document.body.innerHTML = '<p style="font:16px Arial;padding:24px">Preparando o relatório e os comprovantes…</p>';
   setCloudBusy(true);
   buildClosurePdf(closure).then((blob) => {
@@ -881,13 +881,13 @@ export default function App() {
 
   return (
     <div className="app-frame">
-      {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Controle de Fretes" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
-      {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Controle de Fretes" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
+      {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
+      {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
       {authReady && showLogin ? (
         <main className="login-stage">
           <section className="login-card">
             <p className="eyebrow">CONTROLE DE OPERAÇÃO</p>
-            <img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Controle de Fretes" />
+            <img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" />
             <p className="login-copy">Entre para acompanhar lançamentos, fechamentos e solicitações.</p>
             <form className="login-form" onSubmit={async (event) => {
               event.preventDefault();
@@ -932,7 +932,7 @@ export default function App() {
         <>
           <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
             <div className="brand-row">
-              <img className="brand-logo" src="/logo-controle-de-fretes.svg" alt="Controle de Fretes" />
+              <img className="brand-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" />
               <button className="icon-button close-mobile" aria-label="Fechar menu" onClick={() => setMobileNav(false)}><X size={18} /></button>
             </div>
             <div className="workspace-label">MENU PRINCIPAL</div>
@@ -973,7 +973,7 @@ export default function App() {
               {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onMarkRequested={markClosureRequested} />}
               {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onDelete={removeDriver} />}
-              <footer className="content-footer"><span>Controle de Fretes</span><span>Os registros exibidos são fictícios</span></footer>
+              <footer className="content-footer"><span>Gestão de Frete</span><span>Os registros exibidos são fictícios</span></footer>
             </section>
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
