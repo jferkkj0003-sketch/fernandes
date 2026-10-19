@@ -292,6 +292,10 @@ export default function App() {
   const [ticketDeletePassword, setTicketDeletePassword] = useState('');
   const [ticketDeleteMessage, setTicketDeleteMessage] = useState('');
   const [ticketDeleteBusy, setTicketDeleteBusy] = useState(false);
+  const [driverToDelete, setDriverToDelete] = useState(null);
+  const [driverDeletePassword, setDriverDeletePassword] = useState('');
+  const [driverDeleteMessage, setDriverDeleteMessage] = useState('');
+  const [driverDeleteBusy, setDriverDeleteBusy] = useState(false);
   const [closureToEdit, setClosureToEdit] = useState(null);
   const scanPrefetchSignature = useRef('');
 
@@ -623,30 +627,52 @@ export default function App() {
     return true;
   }
 
-  async function removeDriver(driver, adminPassword) {
-    const driverTickets = tickets.filter((ticket) => ticket.driver === driver.name);
-    const driverClosures = closures.filter((closure) => closure.driver === driver.name);
-    const detail = `\n\nIsso também apagará ${driverTickets.length} ticket(s) e ${driverClosures.length} fechamento(s) desse motorista. Essa ação não pode ser desfeita.`;
-    if (!window.confirm(`Excluir ${driver.name}?${detail}`)) return;
+  function removeDriver(driver) {
+    if (cloudConfigured && sessionUser && !isAdmin) {
+      setNotice('Somente o administrador pode excluir motoristas.');
+      window.setTimeout(() => setNotice(''), 6000);
+      return;
+    }
+    setDriverDeletePassword('');
+    setDriverDeleteMessage('');
+    setDriverToDelete(driver);
+  }
+
+  async function confirmDeleteDriver(event) {
+    event.preventDefault();
+    const driver = driverToDelete;
+    if (!driver || driverDeleteBusy) return;
+    setDriverDeleteBusy(true);
+    setDriverDeleteMessage('');
     if (cloudConfigured && sessionUser) {
-      setCloudBusy(true);
       try {
-        if (!sessionUser?.email) throw new Error('A conta não tem um e-mail de acesso para validar a senha.');
-        await verifyAdminPassword(sessionUser.email, adminPassword, sessionUser.id);
+        if (!sessionUser.email) throw new Error('A conta não tem um e-mail de acesso para validar a senha.');
+        await verifyAdminPassword(sessionUser.email, driverDeletePassword, sessionUser.id);
+        setCloudBusy(true);
         await deleteCloudDriver(driver.id);
         setDrivers((current) => current.filter((item) => item.id !== driver.id));
         setTickets((current) => current.filter((item) => item.driver !== driver.name));
         setClosures((current) => current.filter((item) => item.driver !== driver.name));
+        setDriverToDelete(null);
+        setDriverDeletePassword('');
         setNotice(`Motorista ${driver.name} e seus registros foram excluídos.`);
+        window.setTimeout(() => setNotice(''), 7000);
       } catch (error) {
-        setNotice(`Não foi possível concluir a exclusão: ${error.message || 'tente novamente'}`);
-      } finally { setCloudBusy(false); }
-      window.setTimeout(() => setNotice(''), 7000);
+        const message = error.message || '';
+        setDriverDeleteMessage(/invalid login credentials|invalid password|credentials/i.test(message)
+          ? 'Senha incorreta. Confira a senha da sua conta administradora e tente novamente.'
+          : `Não foi possível excluir o motorista: ${message || 'tente novamente'}`);
+      } finally {
+        setCloudBusy(false);
+        setDriverDeleteBusy(false);
+      }
       return;
     }
     setDrivers((current) => current.filter((item) => item.id !== driver.id && item.name !== driver.name));
     setTickets((current) => current.filter((item) => item.driver !== driver.name));
     setClosures((current) => current.filter((item) => item.driver !== driver.name));
+    setDriverToDelete(null);
+    setDriverDeleteBusy(false);
     setNotice(`Motorista ${driver.name} e seus registros foram excluídos desta demonstração.`);
     window.setTimeout(() => setNotice(''), 5000);
   }
@@ -939,7 +965,7 @@ export default function App() {
             <nav className="nav-list" aria-label="Menu principal">
               {navItems.filter(({ id }) => id !== 'motoristas' || isAdmin).map(({ id, label, icon: Icon }) => (
                 <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => { setPage(id); setMobileNav(false); }}>
-                  <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{id === 'tickets' && <span className="nav-count">{tickets.length}</span>}
+                  <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{id === 'tickets' && <span className="nav-count">{tickets.filter((ticket) => ticket.status === 'Aberto').length}</span>}
                 </button>
               ))}
             </nav>
@@ -979,6 +1005,7 @@ export default function App() {
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
             {accountOpen && <AccountModal user={sessionUser} onClose={() => setAccountOpen(false)} onSave={saveAccount} busy={accountBusy} message={accountMessage} isAdmin={isAdmin} />}
             {closureToDelete && <AdminDeleteModal closure={closureToDelete} password={deletePassword} setPassword={setDeletePassword} message={deletePasswordMessage} busy={deleteBusy} onClose={() => { if (!deleteBusy) { setClosureToDelete(null); setDeletePassword(''); setDeletePasswordMessage(''); } }} onConfirm={confirmDeleteClosure} />}
+            {driverToDelete && <DriverDeleteModal driver={driverToDelete} ticketCount={tickets.filter((ticket) => ticket.driver === driverToDelete.name).length} closureCount={closures.filter((closure) => closure.driver === driverToDelete.name).length} password={driverDeletePassword} setPassword={setDriverDeletePassword} message={driverDeleteMessage} busy={driverDeleteBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverDeleteBusy) { setDriverToDelete(null); setDriverDeletePassword(''); setDriverDeleteMessage(''); } }} onConfirm={confirmDeleteDriver} />}
             {ticketToDelete && <TicketDeleteModal ticket={ticketToDelete} password={ticketDeletePassword} setPassword={setTicketDeletePassword} message={ticketDeleteMessage} busy={ticketDeleteBusy} onClose={() => { if (!ticketDeleteBusy) { setTicketToDelete(null); setTicketDeletePassword(''); setTicketDeleteMessage(''); } }} onConfirm={confirmDeleteTicket} />}
             {closureToEdit && <ClosureEditorModal key={closureToEdit.id} closure={closureToEdit} tickets={tickets} onClose={() => setClosureToEdit(null)} onSave={saveClosureEdit} />}
           </main>
@@ -1400,6 +1427,11 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
     (!historyStart || item.end >= historyStart) &&
     (!historyEnd || item.start <= historyEnd),
   ).sort((a, b) => (a.status === b.status ? Number(b.number) - Number(a.number) : a.status === 'Aguardando envio' ? -1 : 1));
+  const historyTotals = history.reduce((totals, item) => ({
+    deliveries: totals.deliveries + Number(item.count ?? item.ticketDetails.length),
+    weight: totals.weight + item.ticketDetails.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0),
+    amount: totals.amount + Number(item.total || 0),
+  }), { deliveries: 0, weight: 0, amount: 0 });
   const handleGenerate = async () => {
     if (generating || !selectedMatches.length) return;
     setGenerating(true);
@@ -1419,6 +1451,7 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Histórico de fechamentos <span className="subtle-count">{history.length}</span></h2><p>O histórico reúne todos os motoristas. Os fechamentos que aguardam envio aparecem primeiro, com o PDF em destaque.</p></div></div>
       <div className="filter-fields history-filters"><label>Motorista<select value={historyDriver} onChange={(event) => setHistoryDriver(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><label>Período a partir de<input type="date" value={historyStart} onChange={(event) => setHistoryStart(event.target.value)} /></label><label>Período até<input type="date" value={historyEnd} onChange={(event) => setHistoryEnd(event.target.value)} /></label></div>
+      <div className="metrics-grid history-totals"><Metric icon={ClipboardList} label="Entregas" value={historyTotals.deliveries.toLocaleString('pt-BR')} tint="blue" foot="Tickets nos fechamentos filtrados" /><Metric icon={Truck} label="Peso total" value={`${historyTotals.weight.toLocaleString('pt-BR')} kg`} tint="green" foot="Peso das entregas filtradas" /><Metric icon={BadgeDollarSign} label="Valor total" value={money(historyTotals.amount)} tint="amber" foot="Total líquido dos fechamentos" /></div>
       {history.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>LÍQUIDO</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{history.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(item)}><Trash2 size={14} /> Excluir</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><BadgeDollarSign size={25} /></div><strong>{closures.length ? 'Nenhum fechamento encontrado com esses filtros' : 'Nenhum fechamento nesta demonstração'}</strong><span>{closures.length ? 'Altere o motorista ou as datas para consultar outros fechamentos.' : 'Os fechamentos aparecerão aqui depois de gerados.'}</span></div>}
     </section>
   </>;
@@ -1435,6 +1468,20 @@ function AdminDeleteModal({ closure, password, setPassword, message, busy, onClo
         <small>A senha é validada pelo Supabase e não fica salva no aplicativo.</small>
         {message && <p className="admin-delete-error" role="alert">{message}</p>}
         <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="button delete-button" type="submit" disabled={busy || !password}>{busy ? 'Validando e excluindo…' : 'Confirmar exclusão'}</button></div>
+      </form>
+    </section>
+  </div>;
+}
+
+function DriverDeleteModal({ driver, ticketCount, closureCount, password, setPassword, message, busy, requirePassword, onClose, onConfirm }) {
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="driver-delete-title">
+      <div className="panel-heading"><div><p className="eyebrow">CONFIRMAÇÃO DO ADMINISTRADOR</p><h2 id="driver-delete-title">Excluir motorista {driver.name}?</h2><p>{driver.plate || 'Placa não informada'}</p></div><button className="icon-button" aria-label="Fechar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
+      <p className="admin-delete-copy">Esta ação também apagará {ticketCount} ticket(s) e {closureCount} fechamento(s) deste motorista. Essa ação não pode ser desfeita.</p>
+      <form className="admin-delete-form" onSubmit={onConfirm}>
+        {requirePassword && <><label>Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus /></label><small>A senha é validada pelo Supabase e não fica salva no aplicativo.</small></>}
+        {message && <p className="admin-delete-error" role="alert">{message}</p>}
+        <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="button delete-button" type="submit" disabled={busy || (requirePassword && !password)}>{busy ? 'Validando e excluindo…' : 'Confirmar exclusão'}</button></div>
       </form>
     </section>
   </div>;
@@ -1541,7 +1588,6 @@ function Drivers({ drivers, onSave, onDelete }) {
       <div className="filter-fields driver-fields"><label>Nome completo *<input name="name" defaultValue={editing.name || ''} placeholder="Nome do motorista" required /></label><label>Placa<input name="plate" defaultValue={editing.plate || ''} placeholder="ABC-1D23" /></label><label>Frete padrão (R$) *<input name="defaultFare" type="number" min="0" step="0.01" defaultValue={editing.defaultFare ?? 1000} required /></label><label>CPF<input name="cpf" defaultValue={editing.cpf || ''} placeholder="000.000.000-00" /></label><label>Chave PIX<input name="pix" defaultValue={editing.pix || ''} placeholder="Chave PIX" /></label><label>Banco<input name="bank" defaultValue={editing.bank || ''} placeholder="Nome do banco" /></label><label>Tipo de conta<input name="accountType" defaultValue={editing.accountType || ''} placeholder="Corrente ou poupança" /></label><label>Agência<input name="branch" defaultValue={editing.branch || ''} placeholder="Número da agência" /></label><label>Conta<input name="account" defaultValue={editing.account || ''} placeholder="Número da conta" /></label></div>
       <div className="form-actions"><span><span className="status-dot amber" /> {cloudConfigured ? 'Os dados serão salvos na nuvem.' : 'Demonstração local: os dados não vão para a nuvem.'}</span><button className="button primary" type="submit"><Check size={16} /> {editing.name ? 'Salvar alterações' : 'Salvar motorista'}</button></div>
     </form></section>}
-    <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Use Editar para corrigir. Excluir um motorista também apaga tickets e fechamentos dele.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name}</strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button delete-button small-button" onClick={() => { const password = cloudConfigured ? window.prompt('Digite a senha da conta administradora para excluir este motorista.') : ''; if (cloudConfigured && !password) return; onDelete(driver, password); }}><Trash2 size={13} /> Excluir</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
+    <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Use Editar para corrigir. Excluir um motorista também apaga tickets e fechamentos dele.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name}</strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button delete-button small-button" onClick={() => onDelete(driver)}><Trash2 size={13} /> Excluir</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
   </>;
 }
-
