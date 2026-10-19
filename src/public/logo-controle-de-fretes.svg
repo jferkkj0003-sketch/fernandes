@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="100" viewBox="0 0 420 100" fill="none">
+  <rect x="8" y="8" width="84" height="84" rx="24" fill="#2865D7"/>
+  <path d="M25 34h35a4 4 0 0 1 4 4v26H25V34Z" fill="#fff"/>
+  <path d="M64 45h13l13 14v5H64V45Z" fill="#fff"/>
+  <path d="M68 49v9h15l-8-9h-7Z" fill="#DCE9FF"/>
+  <path d="M20 66h68" stroke="#B8F0D7" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="39" cy="68" r="7" fill="#16324F" stroke="#fff" stroke-width="3"/>
+  <circle cx="73" cy="68" r="7" fill="#16324F" stroke="#fff" stroke-width="3"/>
+  <path d="m29 78 8 4 7-4 8 4 8-4 8 4 8-4" stroke="#B8F0D7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="112" y="59" fill="#16324F" font-family="Manrope, Arial, sans-serif" font-size="27" font-weight="800" letter-spacing="-.8">Controle de Fretes</text>
+</svg>
