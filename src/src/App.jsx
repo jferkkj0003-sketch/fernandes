@@ -41,7 +41,7 @@ const localDaysAgo = (days) => {
 };
 const isWithinClosureDeleteWindow = (closure) => {
   if (closure.status !== 'Solicitado') return true;
-  const sentAt = Date.parse(closure.requestedAt || closure.createdAt || '');
+  const sentAt = Date.parse(closure.sentAt || closure.createdAt || '');
   return Number.isFinite(sentAt) && Date.now() - sentAt <= 5 * 24 * 60 * 60 * 1000;
 };
 const formatDate = (value) => {
