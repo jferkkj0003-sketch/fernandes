@@ -69,7 +69,7 @@ const mapClosure = (row) => {
   return {
     id: row.id, number: String(row.number).padStart(3, '0'), driver: driver.fullName || driver.name || '',
     start: row.period_start, end: row.period_end, count: row.ticket_count, total: Number(row.total) || 0,
-    status: row.status, createdAt: row.created_at || null, requestedAt: row.requested_at || null,
+    status: row.status, createdAt: row.created_at || null, sentAt: row.sent_at || null,
     ticketIds: ticketDetails.map((ticket) => ticket.id), ticketDetails,
     driverDetails: {
       fullName: driver.fullName || driver.name || '', cpf: driver.cpf || '', plate: driver.plate || '',
