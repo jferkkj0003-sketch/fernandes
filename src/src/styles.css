@@ -150,4 +150,12 @@
 :root[data-theme="dark"] .operator-account-row{border-color:#2b394c}
 :root[data-theme="dark"] .operator-account-info strong{color:#e4ebf4}
 :root[data-theme="dark"] .invite-card h1{color:#e4ebf4}
-@media(max-width:520px){.operator-invite-form,.operator-invite-result{grid-template-columns:1fr}.operator-account-row{align-items:flex-start;flex-direction:column}.operator-account-actions{width:100%}.operator-account-actions .button{flex:1}.operator-access .account-share-heading p{max-width:230px}}
+@media(max-width:520px){.operator-invite-form,.operator-invite-result{grid-template-columns:1fr}.operator-account-row{align-items:flex-start;flex-direction:column}.operator-account-actions{width:100%}.operator-account-actions .button{flex:1}.operator-access .account-share-heading p{max-width:230px}}
+
+/* Cartões compactos do histórico de fechamentos */
+.history-totals{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}
+.history-totals .metric-card{min-height:116px;padding:14px 16px}
+.history-totals .metric-icon{width:30px;height:30px;margin-bottom:8px}
+.history-totals .metric-value{font-size:18px;margin-top:3px}
+.history-totals .metric-foot{font-size:9px}
+@media(max-width:520px){.history-totals{grid-template-columns:1fr;gap:8px}.history-totals .metric-card{min-height:92px;padding:11px 13px}.history-totals .metric-icon{width:27px;height:27px;margin-bottom:5px}.history-totals .metric-value{font-size:17px}}
