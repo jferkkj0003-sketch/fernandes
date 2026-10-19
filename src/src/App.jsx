@@ -39,6 +39,11 @@ const localDaysAgo = (days) => {
   date.setDate(date.getDate() - days);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
+const isWithinClosureDeleteWindow = (closure) => {
+  if (closure.status !== 'Solicitado') return true;
+  const sentAt = Date.parse(closure.requestedAt || closure.createdAt || '');
+  return Number.isFinite(sentAt) && Date.now() - sentAt <= 5 * 24 * 60 * 60 * 1000;
+};
 const formatDate = (value) => {
   if (!value) return '';
   const [year, month, day] = value.split('-');
@@ -422,6 +427,12 @@ export default function App() {
     requestedTotal: closures.filter((closure) => closure.status === 'Solicitado').reduce((sum, closure) => sum + closure.total, 0),
   }), [tickets, closures]);
 
+  function canDeleteTicket(ticket) {
+    if ((ticket.requestStatus || ticket.status) !== 'Solicitado') return true;
+    const closure = closures.find((item) => item.ticketIds?.includes(ticket.id));
+    return Boolean(closure && isWithinClosureDeleteWindow(closure));
+  }
+
   async function saveTicket(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -565,7 +576,7 @@ export default function App() {
     window.setTimeout(() => setNotice(''), 5000);
   }
 
-  async function saveDriver(event) {
+  async function saveDriver(event, adminPassword) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
@@ -587,6 +598,10 @@ export default function App() {
     if (cloudConfigured && sessionUser) {
       setCloudBusy(true);
       try {
+        if (record.id) {
+          if (!sessionUser.email) throw new Error('A conta não tem um e-mail de acesso para validar a senha.');
+          await verifyAdminPassword(sessionUser.email, adminPassword, sessionUser.id);
+        }
         const saved = await saveCloudDriver(record);
         setDrivers((current) => [...current.filter((driver) => driver.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
       } catch (error) {
@@ -608,7 +623,7 @@ export default function App() {
     return true;
   }
 
-  async function removeDriver(driver) {
+  async function removeDriver(driver, adminPassword) {
     const driverTickets = tickets.filter((ticket) => ticket.driver === driver.name);
     const driverClosures = closures.filter((closure) => closure.driver === driver.name);
     const detail = `\n\nIsso também apagará ${driverTickets.length} ticket(s) e ${driverClosures.length} fechamento(s) desse motorista. Essa ação não pode ser desfeita.`;
@@ -616,6 +631,8 @@ export default function App() {
     if (cloudConfigured && sessionUser) {
       setCloudBusy(true);
       try {
+        if (!sessionUser?.email) throw new Error('A conta não tem um e-mail de acesso para validar a senha.');
+        await verifyAdminPassword(sessionUser.email, adminPassword, sessionUser.id);
         await deleteCloudDriver(driver.id);
         setDrivers((current) => current.filter((item) => item.id !== driver.id));
         setTickets((current) => current.filter((item) => item.driver !== driver.name));
@@ -647,6 +664,11 @@ export default function App() {
       setTickets((current) => current.filter((item) => item.id !== ticket.id));
       setNotice(`Ticket ${ticket.number} excluído desta demonstração.`);
       window.setTimeout(() => setNotice(''), 5000);
+      return;
+    }
+    if (!canDeleteTicket(ticket)) {
+      setNotice('O prazo para excluir um ticket de fechamento enviado já terminou (5 dias).');
+      window.setTimeout(() => setNotice(''), 6000);
       return;
     }
     setTicketDeletePassword('');
@@ -764,6 +786,11 @@ export default function App() {
   }
 
   function deleteClosure(closure) {
+    if (!isWithinClosureDeleteWindow(closure)) {
+      setNotice('O prazo para excluir este fechamento enviado já terminou (5 dias).');
+      window.setTimeout(() => setNotice(''), 6000);
+      return;
+    }
     if (cloudConfigured && sessionUser && !isAdmin) {
       setNotice('Somente o administrador pode excluir fechamentos.');
       window.setTimeout(() => setNotice(''), 6000);
@@ -778,6 +805,10 @@ export default function App() {
     event.preventDefault();
     const closure = closureToDelete;
     if (!closure || deleteBusy) return;
+    if (!isWithinClosureDeleteWindow(closure)) {
+      setDeletePasswordMessage('O prazo para excluir este fechamento enviado já terminou (5 dias).');
+      return;
+    }
     setDeleteBusy(true);
     setDeletePasswordMessage('');
     if (cloudConfigured && sessionUser) {
@@ -938,7 +969,7 @@ export default function App() {
               {notice && <div className="notice"><span className="status-dot amber" />{notice}<button className="notice-close" onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={16} /></button></div>}
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard totals={totals} tickets={tickets} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
-              {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} saving={savingTicket} />}
+              {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
               {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onMarkRequested={markClosureRequested} />}
               {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onDelete={removeDriver} />}
@@ -995,7 +1026,7 @@ function Metric({ icon: Icon, label, value, tint, foot }) {
   return <div className="metric-card"><div className={`metric-icon ${tint}`}><Icon size={19} strokeWidth={1.9} /></div><span className="metric-label">{label}</span><strong className="metric-value">{value}</strong><span className="metric-foot">{foot}</span></div>;
 }
 
-function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, saving }) {
+function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, canDeleteTicket, saving }) {
   const [scanName, setScanName] = useState('');
   const handleTicketSubmit = async (event) => {
     const form = event.currentTarget;
@@ -1028,14 +1059,14 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
       </form>
     </section>
     <section className="panel list-panel">
-      <div className="panel-heading"><div><h2>Tickets registrados <span className="subtle-count">{tickets.length}</span></h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={() => window.alert('A exportação será conectada em uma etapa futura.')}><ArrowDownToLine size={16} /> Exportar</button></div>
+      <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={() => window.alert('A exportação será conectada em uma etapa futura.')}><ArrowDownToLine size={16} /> Exportar</button></div>
       <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
-      <TicketTable tickets={tickets} onView={onView} onEdit={onEdit} onDelete={onDelete} />
+      <TicketTable tickets={tickets} onView={onView} onEdit={onEdit} onDelete={onDelete} canDeleteTicket={canDeleteTicket} />
     </section>
   </>;
 }
 
-function TicketTable({ tickets, onView, onEdit, onDelete, compact = false }) {
+function TicketTable({ tickets, onView, onEdit, onDelete, canDeleteTicket, compact = false }) {
   return <div className="table-wrap"><table><thead><tr><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PLACA</th>{!compact && <th>PESO</th>}<th>LÍQUIDO</th><th>STATUS</th>{!compact && <th></th>}</tr></thead><tbody>
     {tickets.length ? tickets.map((ticket) => {
       const requestStatus = ticket.requestStatus || ticket.status;
@@ -1048,7 +1079,7 @@ function TicketTable({ tickets, onView, onEdit, onDelete, compact = false }) {
           <td>{ticket.driver}</td><td>{ticket.plate}</td>{!compact && <td>{ticket.weight.toLocaleString('pt-BR')} kg</td>}
           <td><strong>{money(ticket.gross - ticket.discount)}</strong></td>
           <td><span className={`status-badge ${statusClass}`}><i />{statusLabel}</span>{compact && onView && <div className="compact-ticket-actions"><button className="row-action compact-ticket-view" aria-label={`Ver ticket ${ticket.number}`} title="Ver ticket" onClick={() => onView(ticket)}><Eye size={13} /> Ver</button>{!requested && onEdit && <button className="row-action compact-ticket-view" aria-label={`Editar ticket ${ticket.number}`} title="Editar ticket" onClick={() => onEdit(ticket)}><Pencil size={13} /> Editar</button>}</div>}</td>
-          {!compact && <td className="ticket-actions">{onView && <button className="row-action" onClick={() => onView(ticket)}><Eye size={13} /> Ver</button>}{onEdit && !requested && <button className="row-action" onClick={() => onEdit(ticket)}><Pencil size={13} /> Editar</button>}{onDelete && <button className="row-action danger-action" onClick={() => onDelete(ticket)}>Excluir</button>}</td>}
+          {!compact && <td className="ticket-actions">{onView && <button className="row-action" onClick={() => onView(ticket)}><Eye size={13} /> Ver</button>}{onEdit && !requested && <button className="row-action" onClick={() => onEdit(ticket)}><Pencil size={13} /> Editar</button>}{onDelete && <button className="row-action danger-action" disabled={canDeleteTicket && !canDeleteTicket(ticket)} title={canDeleteTicket && !canDeleteTicket(ticket) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(ticket)}>Excluir</button>}</td>}
         </tr>
       );
     }) : <tr className="ticket-empty-row"><td colSpan={compact ? 6 : 8} className="empty-state">Nenhum ticket encontrado com esse filtro.</td></tr>}
@@ -1388,7 +1419,7 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Histórico de fechamentos <span className="subtle-count">{history.length}</span></h2><p>O histórico reúne todos os motoristas. Os fechamentos que aguardam envio aparecem primeiro, com o PDF em destaque.</p></div></div>
       <div className="filter-fields history-filters"><label>Motorista<select value={historyDriver} onChange={(event) => setHistoryDriver(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><label>Período a partir de<input type="date" value={historyStart} onChange={(event) => setHistoryStart(event.target.value)} /></label><label>Período até<input type="date" value={historyEnd} onChange={(event) => setHistoryEnd(event.target.value)} /></label></div>
-      {history.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>LÍQUIDO</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{history.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><Trash2 size={14} /> Excluir</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><BadgeDollarSign size={25} /></div><strong>{closures.length ? 'Nenhum fechamento encontrado com esses filtros' : 'Nenhum fechamento nesta demonstração'}</strong><span>{closures.length ? 'Altere o motorista ou as datas para consultar outros fechamentos.' : 'Os fechamentos aparecerão aqui depois de gerados.'}</span></div>}
+      {history.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>LÍQUIDO</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{history.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(item)}><Trash2 size={14} /> Excluir</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><BadgeDollarSign size={25} /></div><strong>{closures.length ? 'Nenhum fechamento encontrado com esses filtros' : 'Nenhum fechamento nesta demonstração'}</strong><span>{closures.length ? 'Altere o motorista ou as datas para consultar outros fechamentos.' : 'Os fechamentos aparecerão aqui depois de gerados.'}</span></div>}
     </section>
   </>;
 }
@@ -1445,7 +1476,7 @@ function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload,
   return <><PageHeading eyebrow="ACOMPANHAMENTO" title="Solicitações" subtitle="Confira quais fechamentos ainda precisam ser enviados por e-mail." />
     <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos e solicitações</h2><p>Os que aguardam envio aparecem primeiro. Baixe o PDF e, depois de enviar o e-mail, marque a solicitação.</p></div></div>
-      {ordered.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><Trash2 size={14} /> Excluir</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
+      {ordered.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(item)}><Trash2 size={14} /> Excluir</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
     </section>
   </>;
 }
@@ -1505,12 +1536,12 @@ function Drivers({ drivers, onSave, onDelete }) {
   const [query, setQuery] = useState('');
   const visible = drivers.filter((driver) => driver.name.toLowerCase().includes(query.toLowerCase()));
   return <><PageHeading eyebrow="CADASTROS" title="Motoristas" subtitle="Cadastros e dados que acompanham cada solicitação." action={<button className="button primary" onClick={() => setEditing({})}><Plus size={17} /> Novo motorista</button>} />
-    {editing && <section className="panel driver-form-panel"><div className="panel-heading"><div><h2>{editing.name ? 'Editar motorista' : 'Novo motorista'}</h2><p>Os dados bancários aparecerão no relatório do fechamento.</p></div><button className="icon-button" aria-label="Fechar formulário" onClick={() => setEditing(null)}><X size={18} /></button></div><form key={editing.id || editing.name || 'new'} onSubmit={async (event) => { const saved = await onSave(event); if (saved) setEditing(null); }}>
+    {editing && <section className="panel driver-form-panel"><div className="panel-heading"><div><h2>{editing.name ? 'Editar motorista' : 'Novo motorista'}</h2><p>Os dados bancários aparecerão no relatório do fechamento.</p></div><button className="icon-button" aria-label="Fechar formulário" onClick={() => setEditing(null)}><X size={18} /></button></div><form key={editing.id || editing.name || 'new'} onSubmit={async (event) => { let password = ''; if (editing.id && cloudConfigured) { password = window.prompt('Digite a senha da conta administradora para editar este motorista.') || ''; if (!password) return; } const saved = await onSave(event, password); if (saved) setEditing(null); }}>
       <input type="hidden" name="driverId" value={editing.id || ''} /><input type="hidden" name="originalName" value={editing.name || ''} />
       <div className="filter-fields driver-fields"><label>Nome completo *<input name="name" defaultValue={editing.name || ''} placeholder="Nome do motorista" required /></label><label>Placa<input name="plate" defaultValue={editing.plate || ''} placeholder="ABC-1D23" /></label><label>Frete padrão (R$) *<input name="defaultFare" type="number" min="0" step="0.01" defaultValue={editing.defaultFare ?? 1000} required /></label><label>CPF<input name="cpf" defaultValue={editing.cpf || ''} placeholder="000.000.000-00" /></label><label>Chave PIX<input name="pix" defaultValue={editing.pix || ''} placeholder="Chave PIX" /></label><label>Banco<input name="bank" defaultValue={editing.bank || ''} placeholder="Nome do banco" /></label><label>Tipo de conta<input name="accountType" defaultValue={editing.accountType || ''} placeholder="Corrente ou poupança" /></label><label>Agência<input name="branch" defaultValue={editing.branch || ''} placeholder="Número da agência" /></label><label>Conta<input name="account" defaultValue={editing.account || ''} placeholder="Número da conta" /></label></div>
       <div className="form-actions"><span><span className="status-dot amber" /> {cloudConfigured ? 'Os dados serão salvos na nuvem.' : 'Demonstração local: os dados não vão para a nuvem.'}</span><button className="button primary" type="submit"><Check size={16} /> {editing.name ? 'Salvar alterações' : 'Salvar motorista'}</button></div>
     </form></section>}
-    <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Use Editar para corrigir. Excluir um motorista também apaga tickets e fechamentos dele.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name}</strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button delete-button small-button" onClick={() => onDelete(driver)}><Trash2 size={13} /> Excluir</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
+    <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Use Editar para corrigir. Excluir um motorista também apaga tickets e fechamentos dele.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name}</strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button delete-button small-button" onClick={() => { const password = cloudConfigured ? window.prompt('Digite a senha da conta administradora para excluir este motorista.') : ''; if (cloudConfigured && !password) return; onDelete(driver, password); }}><Trash2 size={13} /> Excluir</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
   </>;
 }
-
+
