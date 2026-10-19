@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1770" height="603" viewBox="0 0 590 201" role="img" aria-labelledby="title description">
+  <title id="title">Ração Confiança</title>
+  <desc id="description">Ração Confiança — alimento premium para cães e gatos.</desc>
+  <rect width="590" height="201" fill="#fff"/>
+
+  <!-- Curvas originais da marca, redesenhadas com traço limpo. -->
+  <g fill="none" stroke="#171513" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M201 72 C239 37 275 7 315 4 C359 1 402 21 443 37 C484 53 522 56 557 47 C535 72 511 85 480 91 C452 97 431 95 408 86"/>
+    <path d="M201 72 C248 56 286 57 328 67 C367 77 393 76 424 70 C404 89 382 99 354 97 C310 95 258 81 201 72"/>
+    <path d="M201 72 C253 67 302 71 347 83 C378 92 400 95 424 89 C440 85 454 78 466 68 C483 73 499 72 516 67"/>
+  </g>
+
+  <g fill="#171513">
+    <text x="99" y="101" font-family="Georgia, 'Times New Roman', serif" font-size="18.5" letter-spacing="4.1">RAÇÃO</text>
+    <text x="-2" y="164" transform="scale(1.3 1)" font-family="Georgia, 'Times New Roman', serif" font-size="78" font-weight="400" letter-spacing="-2.2">CONFIANÇA</text>
+    <text x="20" y="194" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="3.8">ALIMENTO PREMIUM PARA CÃES E GATOS</text>
+  </g>
+</svg>
