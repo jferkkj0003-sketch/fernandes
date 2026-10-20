@@ -25,7 +25,7 @@ const navItems = [
   { id: 'painel', label: 'Início', icon: LayoutDashboard },
   { id: 'tickets', label: 'Tickets', icon: ClipboardList },
   { id: 'fechamentos', label: 'Fechamentos', icon: BadgeDollarSign },
-  { id: 'solicitacoes', label: 'Solicitações', icon: CreditCard },
+  { id: 'solicitacoes', label: 'Histórico', icon: CreditCard },
   { id: 'motoristas', label: 'Motoristas', icon: Truck },
 ];
 
@@ -1494,14 +1494,11 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
   </div>;
 }
 
-function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGenerate, onPreview, onDownload, onDelete, onMarkRequested }) {
+function Closures({ tickets, drivers: driverRecords, onGenerate }) {
   const [generating, setGenerating] = useState(false);
   const [driver, setDriver] = useState('');
   const [start, setStart] = useState(() => localDaysAgo(5));
   const [end, setEnd] = useState(localToday);
-  const [historyDriver, setHistoryDriver] = useState('Todos');
-  const [historyStart, setHistoryStart] = useState('');
-  const [historyEnd, setHistoryEnd] = useState('');
   const [selectedTicketIds, setSelectedTicketIds] = useState(() => new Set());
   const drivers = [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].sort();
   const validRange = Boolean(start && end && start <= end);
@@ -1511,19 +1508,6 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
   const matchKey = matches.map((ticket) => ticket.id).join('|');
   useEffect(() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id))), [matchKey]);
   const selectedMatches = matches.filter((ticket) => selectedTicketIds.has(ticket.id));
-  const history = closures.map((item) => {
-    const ticketDetails = item.ticketDetails || tickets.filter((ticket) => item.ticketIds?.includes(ticket.id));
-    return { ...item, ticketDetails, driverDetails: item.driverDetails || driverPaymentDetails(item.driver, ticketDetails, driverRecords.find((driver) => driver.name === item.driver)) };
-  }).filter((item) =>
-    (historyDriver === 'Todos' || item.driver === historyDriver) &&
-    (!historyStart || item.end >= historyStart) &&
-    (!historyEnd || item.start <= historyEnd),
-  ).sort((a, b) => (a.status === b.status ? Number(b.number) - Number(a.number) : a.status === 'Aguardando envio' ? -1 : 1));
-  const historyTotals = history.reduce((totals, item) => ({
-    deliveries: totals.deliveries + Number(item.count ?? item.ticketDetails.length),
-    weight: totals.weight + item.ticketDetails.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0),
-    amount: totals.amount + Number(item.total || 0),
-  }), { deliveries: 0, weight: 0, amount: 0 });
   const handleGenerate = async () => {
     if (generating || !selectedMatches.length) return;
     setGenerating(true);
@@ -1540,11 +1524,6 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
         <div className="table-wrap closure-results"><table><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td></tr>)}</tbody></table></div>
         <div className="closure-action"><span>O fechamento será somente de {driver} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
       </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket aberto encontrado nesse período. Os resultados mudam automaticamente ao alterar os filtros.</span></div>}
-    </section>
-    <section className="panel list-panel"><div className="panel-heading"><div><h2>Histórico de fechamentos <span className="subtle-count">{history.length}</span></h2><p>O histórico reúne todos os motoristas. Os fechamentos que aguardam envio aparecem primeiro, com o PDF em destaque.</p></div></div>
-      <div className="filter-fields history-filters"><label>Motorista<select value={historyDriver} onChange={(event) => setHistoryDriver(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><label>Período a partir de<input type="date" value={historyStart} onChange={(event) => setHistoryStart(event.target.value)} /></label><label>Período até<input type="date" value={historyEnd} onChange={(event) => setHistoryEnd(event.target.value)} /></label></div>
-      <div className="metrics-grid history-totals"><Metric icon={ClipboardList} label="Entregas" value={historyTotals.deliveries.toLocaleString('pt-BR')} tint="blue" foot="Tickets nos fechamentos filtrados" /><Metric icon={Truck} label="Peso total" value={`${historyTotals.weight.toLocaleString('pt-BR')} kg`} tint="green" foot="Peso das entregas filtradas" /><Metric icon={BadgeDollarSign} label="Valor total" value={money(historyTotals.amount)} tint="amber" foot="Total líquido dos fechamentos" /></div>
-      {history.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>LÍQUIDO</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{history.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(item)}>{item.status === 'Solicitado' ? <RefreshCw size={14} /> : <Trash2 size={14} />} {item.status === 'Solicitado' ? 'Reabrir tickets' : 'Excluir'}</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><BadgeDollarSign size={25} /></div><strong>{closures.length ? 'Nenhum fechamento encontrado com esses filtros' : 'Nenhum fechamento nesta demonstração'}</strong><span>{closures.length ? 'Altere o motorista ou as datas para consultar outros fechamentos.' : 'Os fechamentos aparecerão aqui depois de gerados.'}</span></div>}
     </section>
   </>;
 }
@@ -1612,9 +1591,9 @@ function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload,
   const ordered = [...closures].sort((a, b) => (a.status === b.status ? Number(b.number) - Number(a.number) : a.status === 'Aguardando envio' ? -1 : 1));
   const waiting = ordered.filter((closure) => closure.status === 'Aguardando envio');
   const sent = ordered.filter((closure) => closure.status === 'Solicitado');
-  return <><PageHeading eyebrow="ACOMPANHAMENTO" title="Solicitações" subtitle="Confira quais fechamentos ainda precisam ser enviados por e-mail." />
+  return <><PageHeading eyebrow="CONSULTA" title="Histórico" subtitle="Consulte os fechamentos anteriores e acompanhe o status do envio." />
     <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
-    <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos e solicitações</h2><p>Os que aguardam envio aparecem primeiro. Baixe o PDF e, depois de enviar o e-mail, marque a solicitação.</p></div></div>
+    <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Os pendentes de envio aparecem primeiro; marque quando o e-mail for enviado.</p></div></div>
       {ordered.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(item)}>{item.status === 'Solicitado' ? <RefreshCw size={14} /> : <Trash2 size={14} />} {item.status === 'Solicitado' ? 'Reabrir tickets' : 'Excluir'}</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
     </section>
   </>;
