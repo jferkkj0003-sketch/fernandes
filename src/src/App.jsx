@@ -1113,14 +1113,17 @@ function Dashboard({ tickets, drivers: driverRecords, closures, isAdmin, goTo, o
   const periodComparisonAvailable = Boolean(previousRange);
   const statusCounts = useMemo(() => {
     const counts = { open: 0, closing: 0, sent: 0 };
+    const amounts = { open: 0, closing: 0, sent: 0 };
     for (const ticket of filteredTickets) {
       const status = dashboardTicketStatus(ticket);
-      if (status === 'Aberto') counts.open += 1;
-      else if (status === 'Solicitado') counts.sent += 1;
-      else counts.closing += 1;
+      const amount = Number(ticket.gross || 0) - Number(ticket.discount || 0);
+      if (status === 'Aberto') { counts.open += 1; amounts.open += amount; }
+      else if (status === 'Solicitado') { counts.sent += 1; amounts.sent += amount; }
+      else { counts.closing += 1; amounts.closing += amount; }
     }
-    return counts;
+    return { ...counts, amounts };
   }, [filteredTickets]);
+  const statusAmounts = statusCounts.amounts;
   const statusTotal = statusCounts.open + statusCounts.closing + statusCounts.sent;
   let gradientPosition = 0;
   const donutGradient = statusTotal ? `conic-gradient(${[
@@ -1181,16 +1184,14 @@ function Dashboard({ tickets, drivers: driverRecords, closures, isAdmin, goTo, o
   return <>
     <PageHeading eyebrow="CENTRAL DA OPERAÇÃO" title="Painel de controle" subtitle="Acompanhe o volume, o peso, os valores e o andamento das entregas." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
     <section className="panel dashboard-filter-panel">
-      <div className="panel-heading"><div><h2>Filtros da operação</h2><p>Os indicadores, gráficos e rankings acompanham os filtros selecionados.</p></div></div>
+      <div className="panel-heading"><div><h2>Filtrar resultados</h2><p>Escolha um motorista e um período para atualizar todo o painel.</p></div></div>
       <div className="filter-fields dashboard-filters">
         <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label>
-        <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option><option>Aguardando envio</option><option>Solicitado</option></select></label>
-        <label>Cliente<select disabled title="O cadastro atual não possui campo de cliente."><option>Não cadastrado</option></select></label>
+        <label>Situação<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>Aguardando envio</option><option>Solicitado</option></select></label>
         <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
         <label>Data final<input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></label>
       </div>
-      <div className="selection-toolbar dashboard-periods"><span>Atalhos:</span><button className="text-button" onClick={() => setQuickPeriod('today')}>Hoje</button><button className="text-button" onClick={() => setQuickPeriod('yesterday')}>Ontem</button><button className="text-button" onClick={() => setQuickPeriod('7')}>Últimos 7 dias</button><button className="text-button" onClick={() => setQuickPeriod('month')}>Este mês</button><button className="text-button" onClick={() => setQuickPeriod('previousMonth')}>Mês anterior</button><button className="text-button" onClick={() => setQuickPeriod('all')}>Todo período</button></div>
-      <div className="dashboard-data-note"><CircleHelp size={15} /><span>Cliente, nota fiscal, ordem de entrega e ajudantes ainda não são campos dos registros atuais. O painel não exibe valores inventados.</span></div>
+      <div className="selection-toolbar dashboard-periods"><span>Período:</span><button className="text-button" onClick={() => setQuickPeriod('today')}>Hoje</button><button className="text-button" onClick={() => setQuickPeriod('7')}>7 dias</button><button className="text-button" onClick={() => setQuickPeriod('month')}>Este mês</button><button className="text-button" onClick={() => setQuickPeriod('previousMonth')}>Mês anterior</button><button className="text-button" onClick={() => setQuickPeriod('all')}>Todo o período</button></div>
       {invalidDateRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
     </section>
 
@@ -1198,9 +1199,9 @@ function Dashboard({ tickets, drivers: driverRecords, closures, isAdmin, goTo, o
       <Metric icon={ClipboardList} label="Total de fretes" value={summary.count.toLocaleString('pt-BR')} tint="blue" foot={dashboardComparison(summary.count, previousSummary.count, periodComparisonAvailable)} />
       <Metric icon={Truck} label="Peso transportado" value={formatWeight(summary.weight)} tint="violet" foot={dashboardComparison(summary.weight, previousSummary.weight, periodComparisonAvailable)} />
       <Metric icon={BadgeDollarSign} label="Valor total dos fretes" value={money(netTotal)} tint="green" foot={`${dashboardComparison(netTotal, previousSummary.net, periodComparisonAvailable)} · líquido após descontos`} />
-      <Metric icon={ClipboardList} label="Tickets abertos" value={summary.open.toLocaleString('pt-BR')} tint="amber" foot="Aguardando inclusão em fechamento" />
-      <Metric icon={Check} label="Fretes concluídos" value={summary.completed.toLocaleString('pt-BR')} tint="green" foot="Tickets incluídos em um fechamento" />
-      <Metric icon={Users} label="Ajudantes" value="Não registrado" tint="blue" foot="O cadastro atual não armazena ajudantes" />
+      <Metric icon={ClipboardList} label="Tickets em aberto" value={statusCounts.open.toLocaleString('pt-BR')} tint="amber" foot={`${money(statusAmounts.open)} em fretes aguardando fechamento`} />
+      <Metric icon={CreditCard} label="Aguardando envio" value={statusCounts.closing.toLocaleString('pt-BR')} tint="amber" foot={`${money(statusAmounts.closing)} em fechamentos pendentes`} />
+      <Metric icon={Check} label="Solicitados por e-mail" value={statusCounts.sent.toLocaleString('pt-BR')} tint="green" foot={`${money(statusAmounts.sent)} em fechamentos enviados`} />
     </section>
 
     <div className="dashboard-grid dashboard-analytics-grid">
@@ -1229,7 +1230,6 @@ function Dashboard({ tickets, drivers: driverRecords, closures, isAdmin, goTo, o
     <section className="panel recent-panel dashboard-recent-panel">
       <div className="panel-heading dashboard-recent-heading"><div><h2>Tickets recentes</h2><p>Ordenados pela data mais recente · {filteredTickets.length.toLocaleString('pt-BR')} registros no filtro</p></div><div className="dashboard-recent-actions"><label className="search-box"><Search size={15} /><input value={recentQuery} onChange={(event) => setRecentQuery(event.target.value)} placeholder="Buscar ticket ou motorista" aria-label="Buscar ticket ou motorista" /></label><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div></div>
       {recentTickets.length ? <TicketTable tickets={recentTickets} onView={onView} onEdit={onEdit} /> : <div className="empty-state">Nenhum ticket encontrado com os filtros atuais.</div>}
-      <div className="dashboard-data-note"><CircleHelp size={15} /><span>A tabela usa os dados disponíveis: ticket, data, motorista, placa, peso, valor e status. NF, cliente e ordem de entrega ainda não são registrados.</span></div>
     </section>
   </>;
 }
