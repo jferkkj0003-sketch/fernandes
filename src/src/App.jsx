@@ -1076,7 +1076,25 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
     return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key)).slice(-maxPeriods);
   }, [filteredTickets, chartGranularity]);
   const maxChartCount = Math.max(1, ...chartData.map((item) => item.count));
-  const maxChartWeight = Math.max(1, ...chartData.map((item) => item.weight));
+  const weightByDriver = useMemo(() => {
+    const totals = new Map();
+    for (const ticket of filteredTickets) {
+      const name = ticket.driver || 'Motorista não identificado';
+      totals.set(name, (totals.get(name) || 0) + Number(ticket.weight || 0));
+    }
+    const sorted = [...totals].map(([name, weight]) => ({ name, weight })).filter((item) => item.weight > 0).sort((a, b) => b.weight - a.weight);
+    const topDrivers = sorted.slice(0, 5);
+    const otherWeight = sorted.slice(5).reduce((sum, item) => sum + item.weight, 0);
+    return otherWeight > 0 ? [...topDrivers, { name: 'Outros', weight: otherWeight }] : topDrivers;
+  }, [filteredTickets]);
+  const donutTotalWeight = weightByDriver.reduce((sum, item) => sum + item.weight, 0);
+  const donutColors = ['#3478ea', '#2a9b72', '#e5a631', '#8b6bd6', '#e16c55', '#8291a5'];
+  let donutPosition = 0;
+  const weightDonutGradient = donutTotalWeight > 0 ? `conic-gradient(${weightByDriver.map((item, index) => {
+    const start = donutPosition;
+    donutPosition += (item.weight / donutTotalWeight) * 100;
+    return `${donutColors[index % donutColors.length]} ${start}% ${donutPosition}%`;
+  }).join(', ')})` : 'conic-gradient(#dce4ee 0% 100%)';
   const formatWeight = formatDashboardWeight;
 
   return <>
@@ -1100,12 +1118,12 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
 
     <section className="dashboard-charts" aria-label="Gráficos do período">
       <div className="panel dashboard-chart-panel">
-        <div className="panel-heading dashboard-chart-heading"><div><h2>Fretes no período</h2><p>Quantidade por {chartGranularity === 'day' ? 'dia' : chartGranularity === 'week' ? 'semana' : 'mês'}</p></div><div className="dashboard-chart-switch" aria-label="Agrupar gráficos"><button className={chartGranularity === 'day' ? 'active' : ''} onClick={() => setChartGranularity('day')}>Dia</button><button className={chartGranularity === 'week' ? 'active' : ''} onClick={() => setChartGranularity('week')}>Semana</button><button className={chartGranularity === 'month' ? 'active' : ''} onClick={() => setChartGranularity('month')}>Mês</button></div></div>
+        <div className="panel-heading dashboard-chart-heading"><div><h2>Fretes no período</h2><p>Quantidade por {chartGranularity === 'day' ? 'dia' : chartGranularity === 'week' ? 'semana' : 'mês'}</p></div><div className="dashboard-chart-switch" aria-label="Agrupar gráfico de fretes"><button className={chartGranularity === 'day' ? 'active' : ''} onClick={() => setChartGranularity('day')}>Dia</button><button className={chartGranularity === 'week' ? 'active' : ''} onClick={() => setChartGranularity('week')}>Semana</button><button className={chartGranularity === 'month' ? 'active' : ''} onClick={() => setChartGranularity('month')}>Mês</button></div></div>
         <DashboardBarChart data={chartData} field="count" max={maxChartCount} format={(value) => Number(value).toLocaleString('pt-BR')} tint="blue" ariaLabel="Quantidade de fretes por período" />
       </div>
       <div className="panel dashboard-chart-panel">
-        <div className="panel-heading"><div><h2>Peso transportado</h2><p>Total por {chartGranularity === 'day' ? 'dia' : chartGranularity === 'week' ? 'semana' : 'mês'}</p></div></div>
-        <DashboardBarChart data={chartData} field="weight" max={maxChartWeight} format={formatWeight} tint="violet" ariaLabel="Peso transportado por período" />
+        <div className="panel-heading"><div><h2>Peso por motorista</h2><p>Distribuição do peso no período filtrado</p></div></div>
+        {donutTotalWeight > 0 ? <div className="dashboard-weight-layout"><div className="dashboard-weight-donut" role="img" aria-label={`Peso total ${formatWeight(donutTotalWeight)}, distribuído entre ${weightByDriver.length} grupos de motoristas`} style={{ background: weightDonutGradient }}><div><strong>{formatWeight(donutTotalWeight)}</strong><span>Peso total</span></div></div><div className="dashboard-weight-legend">{weightByDriver.map((item, index) => <div className="dashboard-weight-row" key={item.name}><span className="dashboard-weight-swatch" style={{ background: donutColors[index % donutColors.length] }} /><span className="dashboard-weight-name" title={item.name}>{item.name}</span><strong>{formatWeight(item.weight)}</strong></div>)}</div></div> : <div className="empty-state">Sem peso registrado neste período.</div>}
       </div>
     </section>
 
