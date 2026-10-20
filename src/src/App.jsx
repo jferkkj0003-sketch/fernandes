@@ -1019,109 +1019,231 @@ function PageHeading({ eyebrow = 'VISÃO GERAL', title, subtitle, action }) {
   return <div className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>{action}</div>;
 }
 
+function shiftDashboardDate(value, days) {
+  if (!value) return '';
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function dashboardTicketStatus(ticket) {
+  if (ticket.requestStatus === 'Solicitado' || ticket.requestStatus === 'Aguardando envio') return ticket.requestStatus;
+  return ticket.status || 'Aberto';
+}
+
+function previousDashboardRange(start, end) {
+  if (!start || !end || end < start) return null;
+  const startTime = new Date(`${start}T00:00:00`).getTime();
+  const endTime = new Date(`${end}T00:00:00`).getTime();
+  const days = Math.round((endTime - startTime) / 86400000) + 1;
+  if (!Number.isFinite(days) || days < 1) return null;
+  return { start: shiftDashboardDate(start, -days), end: shiftDashboardDate(start, -1) };
+}
+
+function formatDashboardWeight(value) {
+  const weight = Number(value || 0);
+  return weight >= 1000
+    ? `${(weight / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t`
+    : `${weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
+}
+
+function dashboardComparison(current, previous, available) {
+  if (!available) return 'Sem comparação para o período selecionado';
+  if (previous === 0) return current === 0 ? 'Sem variação no período anterior' : 'Novo neste período';
+  const change = ((current - previous) / previous) * 100;
+  const arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+  return `${arrow} ${Math.abs(change).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% vs. período anterior`;
+}
+
+function dashboardGroup(ticket, granularity) {
+  const date = ticket.dateISO;
+  if (!date) return { key: 'sem-data', label: 'Sem data' };
+  if (granularity === 'month') {
+    const key = date.slice(0, 7);
+    const [year, month] = key.split('-').map(Number);
+    return { key, label: new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(new Date(year, month - 1, 1)) };
+  }
+  if (granularity === 'week') {
+    const [year, month, day] = date.split('-').map(Number);
+    const start = new Date(year, month - 1, day);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    return { key, label: `${formatDate(key).slice(0, 5)}–${formatDate(shiftDashboardDate(key, 6)).slice(0, 5)}` };
+  }
+  return { key: date, label: formatDate(date).slice(0, 5) };
+}
+
 function Dashboard({ tickets, drivers: driverRecords, closures, isAdmin, goTo, onView, onEdit }) {
   const [driverFilter, setDriverFilter] = useState('Todos');
+  const [statusFilter, setStatusFilter] = useState('Todos');
   const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
   const [endDate, setEndDate] = useState(localToday);
-  const drivers = [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const filteredTickets = tickets.filter((ticket) =>
+  const [chartGranularity, setChartGranularity] = useState('day');
+  const [rankingMetric, setRankingMetric] = useState('count');
+  const [recentQuery, setRecentQuery] = useState('');
+  const drivers = useMemo(() => [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')), [driverRecords, tickets]);
+  const invalidDateRange = Boolean(startDate && endDate && startDate > endDate);
+  const matchesCommonFilters = (ticket) =>
     (driverFilter === 'Todos' || ticket.driver === driverFilter) &&
-    (!startDate || ticket.dateISO >= startDate) &&
-    (!endDate || ticket.dateISO <= endDate),
-  );
-  const filteredClosures = closures.filter((closure) =>
-    (driverFilter === 'Todos' || closure.driver === driverFilter) &&
-    (!startDate || closure.end >= startDate) &&
-    (!endDate || closure.start <= endDate),
-  );
-  const dashboardTotals = filteredTickets.reduce((result, ticket) => ({
-    weight: result.weight + Number(ticket.weight || 0),
-    gross: result.gross + Number(ticket.gross || 0),
-    discount: result.discount + Number(ticket.discount || 0),
-  }), { weight: 0, gross: 0, discount: 0 });
-  const openTickets = filteredTickets.filter((ticket) => ticket.status === 'Aberto');
-  const awaitingClosures = filteredClosures.filter((closure) => closure.status === 'Aguardando envio');
-  const requestedClosures = filteredClosures.filter((closure) => closure.status === 'Solicitado');
-  const byDriver = drivers.map((name) => {
-    const items = filteredTickets.filter((ticket) => ticket.driver === name);
-    return { name, count: items.length, weight: items.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0), total: items.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0) };
-  }).filter((item) => item.count).sort((a, b) => b.total - a.total);
-  const recentTickets = [...filteredTickets].sort((a, b) => {
-    const aCreated = Date.parse(a.createdAt || '') || 0;
-    const bCreated = Date.parse(b.createdAt || '') || 0;
-    if (aCreated || bCreated) return bCreated - aCreated;
-    return (b.dateISO || '').localeCompare(a.dateISO || '');
-  }).slice(0, 8);
-  const dailyActivity = Object.values(filteredTickets.reduce((days, ticket) => {
-    const key = ticket.dateISO || 'sem-data';
-    if (!days[key]) days[key] = { date: key, count: 0, total: 0 };
-    days[key].count += 1;
-    days[key].total += Number(ticket.gross || 0) - Number(ticket.discount || 0);
-    return days;
-  }, {})).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
-  const maxDailyValue = Math.max(1, ...dailyActivity.map((day) => day.total));
+    (statusFilter === 'Todos' || dashboardTicketStatus(ticket) === statusFilter);
+  const filteredTickets = useMemo(() => invalidDateRange ? [] : tickets.filter((ticket) =>
+    matchesCommonFilters(ticket) && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate),
+  ), [tickets, driverFilter, statusFilter, startDate, endDate, invalidDateRange]);
+  const previousRange = useMemo(() => invalidDateRange ? null : previousDashboardRange(startDate, endDate), [startDate, endDate, invalidDateRange]);
+  const previousTickets = useMemo(() => previousRange ? tickets.filter((ticket) =>
+    matchesCommonFilters(ticket) && ticket.dateISO >= previousRange.start && ticket.dateISO <= previousRange.end,
+  ) : [], [tickets, driverFilter, statusFilter, previousRange]);
+  const summary = useMemo(() => filteredTickets.reduce((result, ticket) => {
+    result.count += 1;
+    result.weight += Number(ticket.weight || 0);
+    result.gross += Number(ticket.gross || 0);
+    result.discount += Number(ticket.discount || 0);
+    if (dashboardTicketStatus(ticket) === 'Aberto') result.open += 1;
+    else result.completed += 1;
+    return result;
+  }, { count: 0, weight: 0, gross: 0, discount: 0, open: 0, completed: 0 }), [filteredTickets]);
+  const previousSummary = useMemo(() => previousTickets.reduce((result, ticket) => {
+    result.weight += Number(ticket.weight || 0);
+    result.net += Number(ticket.gross || 0) - Number(ticket.discount || 0);
+    result.count += 1;
+    return result;
+  }, { weight: 0, net: 0, count: 0 }), [previousTickets]);
+  const netTotal = summary.gross - summary.discount;
+  const periodComparisonAvailable = Boolean(previousRange);
+  const statusCounts = useMemo(() => {
+    const counts = { open: 0, closing: 0, sent: 0 };
+    for (const ticket of filteredTickets) {
+      const status = dashboardTicketStatus(ticket);
+      if (status === 'Aberto') counts.open += 1;
+      else if (status === 'Solicitado') counts.sent += 1;
+      else counts.closing += 1;
+    }
+    return counts;
+  }, [filteredTickets]);
+  const statusTotal = statusCounts.open + statusCounts.closing + statusCounts.sent;
+  let gradientPosition = 0;
+  const donutGradient = statusTotal ? `conic-gradient(${[
+    ['#3478ea', statusCounts.open], ['#e5a631', statusCounts.closing], ['#2a9b72', statusCounts.sent],
+  ].map(([color, count]) => {
+    const start = gradientPosition;
+    gradientPosition += (count / statusTotal) * 100;
+    return `${color} ${start}% ${gradientPosition}%`;
+  }).join(', ')})` : 'conic-gradient(#dce4ee 0% 100%)';
+  const rankingRows = useMemo(() => {
+    const byDriver = new Map();
+    for (const ticket of filteredTickets) {
+      const row = byDriver.get(ticket.driver) || { name: ticket.driver || 'Motorista não identificado', count: 0, weight: 0, amount: 0 };
+      row.count += 1;
+      row.weight += Number(ticket.weight || 0);
+      row.amount += Number(ticket.gross || 0) - Number(ticket.discount || 0);
+      byDriver.set(row.name, row);
+    }
+    return [...byDriver.values()].sort((a, b) => b[rankingMetric] - a[rankingMetric] || a.name.localeCompare(b.name, 'pt-BR')).slice(0, 10);
+  }, [filteredTickets, rankingMetric]);
+  const groupedActivity = useMemo(() => {
+    const groups = new Map();
+    for (const ticket of filteredTickets) {
+      const date = dashboardGroup(ticket, chartGranularity);
+      const group = groups.get(date.key) || { ...date, count: 0, weight: 0, amount: 0 };
+      group.count += 1;
+      group.weight += Number(ticket.weight || 0);
+      group.amount += Number(ticket.gross || 0) - Number(ticket.discount || 0);
+      groups.set(date.key, group);
+    }
+    const limits = { day: 30, week: 26, month: 12 };
+    return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key)).slice(-(limits[chartGranularity] || 30));
+  }, [filteredTickets, chartGranularity]);
+  const maxCount = Math.max(1, ...groupedActivity.map((item) => item.count));
+  const maxWeight = Math.max(1, ...groupedActivity.map((item) => item.weight));
+  const query = recentQuery.trim().toLocaleLowerCase('pt-BR');
+  const recentTickets = useMemo(() => [...filteredTickets]
+    .filter((ticket) => !query || `${ticket.number} ${ticket.driver} ${ticket.plate} ${ticket.note}`.toLocaleLowerCase('pt-BR').includes(query))
+    .sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || '') || (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0))
+    .slice(0, 12), [filteredTickets, query]);
   const setQuickPeriod = (period) => {
     const today = localToday();
-    setEndDate(today);
-    if (period === 'today') setStartDate(today);
-    else if (period === '7') setStartDate(localDaysAgo(6));
-    else if (period === '30') setStartDate(localDaysAgo(29));
-    else if (period === 'month') setStartDate(`${today.slice(0, 7)}-01`);
-    else { setStartDate(''); setEndDate(''); }
+    if (period === 'today') { setStartDate(today); setEndDate(today); }
+    else if (period === 'yesterday') { const day = shiftDashboardDate(today, -1); setStartDate(day); setEndDate(day); }
+    else if (period === '7') { setStartDate(shiftDashboardDate(today, -6)); setEndDate(today); }
+    else if (period === 'month') { setStartDate(`${today.slice(0, 7)}-01`); setEndDate(today); }
+    else if (period === 'previousMonth') {
+      const first = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 2, 1);
+      const last = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 0);
+      const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      setStartDate(iso(first)); setEndDate(iso(last));
+    } else { setStartDate(''); setEndDate(''); }
   };
-  const formatWeight = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
-  const closureTotal = (items) => items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const formatWeight = formatDashboardWeight;
+  const chartFormat = chartGranularity === 'month' ? 'month' : chartGranularity === 'week' ? 'week' : 'day';
+  const dateCaption = startDate && endDate ? `${formatDate(startDate)} a ${formatDate(endDate)}` : 'Todo o período disponível';
+
   return <>
-    <PageHeading eyebrow="CENTRAL DA OPERAÇÃO" title="Painel de controle" subtitle="Acompanhe entregas, peso, valores e fechamentos em um só lugar." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
+    <PageHeading eyebrow="CENTRAL DA OPERAÇÃO" title="Painel de controle" subtitle="Acompanhe o volume, o peso, os valores e o andamento das entregas." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
     <section className="panel dashboard-filter-panel">
-      <div className="panel-heading"><div><h2>Filtrar painel</h2><p>Todos os indicadores acompanham o motorista e o período selecionados.</p></div></div>
+      <div className="panel-heading"><div><h2>Filtros da operação</h2><p>Os indicadores, gráficos e rankings acompanham os filtros selecionados.</p></div></div>
       <div className="filter-fields dashboard-filters">
         <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label>
-        <label>Data inicial<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-        <label>Data final<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+        <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option><option>Aguardando envio</option><option>Solicitado</option></select></label>
+        <label>Cliente<select disabled title="O cadastro atual não possui campo de cliente."><option>Não cadastrado</option></select></label>
+        <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
+        <label>Data final<input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></label>
       </div>
-      <div className="selection-toolbar dashboard-periods"><span>Período rápido:</span><button className="text-button" onClick={() => setQuickPeriod('today')}>Hoje</button><button className="text-button" onClick={() => setQuickPeriod('7')}>7 dias</button><button className="text-button" onClick={() => setQuickPeriod('30')}>30 dias</button><button className="text-button" onClick={() => setQuickPeriod('month')}>Este mês</button><button className="text-button" onClick={() => setQuickPeriod('all')}>Todo período</button></div>
+      <div className="selection-toolbar dashboard-periods"><span>Atalhos:</span><button className="text-button" onClick={() => setQuickPeriod('today')}>Hoje</button><button className="text-button" onClick={() => setQuickPeriod('yesterday')}>Ontem</button><button className="text-button" onClick={() => setQuickPeriod('7')}>Últimos 7 dias</button><button className="text-button" onClick={() => setQuickPeriod('month')}>Este mês</button><button className="text-button" onClick={() => setQuickPeriod('previousMonth')}>Mês anterior</button><button className="text-button" onClick={() => setQuickPeriod('all')}>Todo período</button></div>
+      <div className="dashboard-data-note"><CircleHelp size={15} /><span>Cliente, nota fiscal, ordem de entrega e ajudantes ainda não são campos dos registros atuais. O painel não exibe valores inventados.</span></div>
+      {invalidDateRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
     </section>
-    <div className="metrics-grid home-metrics-grid dashboard-primary-metrics">
-      <Metric icon={ClipboardList} label="Entregas" value={filteredTickets.length.toLocaleString('pt-BR')} tint="blue" foot="Tickets no período filtrado" />
-      <Metric icon={Truck} label="Peso total" value={formatWeight(dashboardTotals.weight)} tint="green" foot="Peso das entregas filtradas" />
-      <Metric icon={BadgeDollarSign} label="Valor bruto" value={money(dashboardTotals.gross)} tint="violet" foot="Antes dos descontos" />
-      <Metric icon={CreditCard} label="Descontos" value={money(dashboardTotals.discount)} tint="amber" foot="Descontos nos tickets filtrados" />
-      <Metric icon={Check} label="Valor líquido" value={money(dashboardTotals.gross - dashboardTotals.discount)} tint="green" foot="Bruto menos descontos" />
-    </div>
-    <div className="metrics-grid home-metrics-grid dashboard-status-metrics">
-      <Metric icon={ClipboardList} label="Tickets em aberto" value={money(openTickets.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))} tint="blue" foot={`${openTickets.length} ticket(s) aguardando fechamento`} />
-      <Metric icon={CreditCard} label="Aguardando envio" value={money(closureTotal(awaitingClosures))} tint="amber" foot={`${awaitingClosures.length} fechamento(s)`} />
-      <Metric icon={Check} label="Solicitados por e-mail" value={money(closureTotal(requestedClosures))} tint="green" foot={`${requestedClosures.length} fechamento(s) enviados`} />
-    </div>
-    <div className="dashboard-grid dashboard-insights-grid">
+
+    <section className="metrics-grid home-metrics-grid dashboard-kpi-grid" aria-label="Indicadores da operação">
+      <Metric icon={ClipboardList} label="Total de fretes" value={summary.count.toLocaleString('pt-BR')} tint="blue" foot={dashboardComparison(summary.count, previousSummary.count, periodComparisonAvailable)} />
+      <Metric icon={Truck} label="Peso transportado" value={formatWeight(summary.weight)} tint="violet" foot={dashboardComparison(summary.weight, previousSummary.weight, periodComparisonAvailable)} />
+      <Metric icon={BadgeDollarSign} label="Valor total dos fretes" value={money(netTotal)} tint="green" foot={`${dashboardComparison(netTotal, previousSummary.net, periodComparisonAvailable)} · líquido após descontos`} />
+      <Metric icon={ClipboardList} label="Tickets abertos" value={summary.open.toLocaleString('pt-BR')} tint="amber" foot="Aguardando inclusão em fechamento" />
+      <Metric icon={Check} label="Fretes concluídos" value={summary.completed.toLocaleString('pt-BR')} tint="green" foot="Tickets incluídos em um fechamento" />
+      <Metric icon={Users} label="Ajudantes" value="Não registrado" tint="blue" foot="O cadastro atual não armazena ajudantes" />
+    </section>
+
+    <div className="dashboard-grid dashboard-analytics-grid">
       <section className="panel dashboard-chart-panel">
-        <div className="panel-heading"><div><h2>Movimento diário</h2><p>Valor líquido dos tickets por dia · até 14 dias com lançamentos</p></div></div>
-        {dailyActivity.length ? <div className="dashboard-bars" role="img" aria-label="Gráfico de valor líquido por dia" style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 190, padding: '12px 4px 0', overflowX: 'auto' }}>
-          {dailyActivity.map((day) => <div key={day.date} title={`${day.date === 'sem-data' ? 'Sem data' : formatDate(day.date)} · ${money(day.total)} · ${day.count} entrega(s)`} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 6, minWidth: 34, height: '100%', flex: 1 }}><strong style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{money(day.total)}</strong><div style={{ width: 'min(100%, 42px)', height: `${Math.max(5, day.total / maxDailyValue * 100)}%`, minHeight: 5, borderRadius: '6px 6px 0 0', background: 'linear-gradient(180deg, #5592ff, #2864d8)' }} /><small style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{day.date === 'sem-data' ? '—' : formatDate(day.date).slice(0, 5)}</small></div>)}
-        </div> : <div className="empty-state">Nenhum ticket encontrado neste período.</div>}
+        <div className="panel-heading dashboard-chart-heading"><div><h2>Movimentação de fretes</h2><p>{dateCaption} · {filteredTickets.length.toLocaleString('pt-BR')} tickets</p></div><div className="dashboard-chart-switch" aria-label="Agrupar movimentação"><button className={chartGranularity === 'day' ? 'active' : ''} onClick={() => setChartGranularity('day')}>Dia</button><button className={chartGranularity === 'week' ? 'active' : ''} onClick={() => setChartGranularity('week')}>Semana</button><button className={chartGranularity === 'month' ? 'active' : ''} onClick={() => setChartGranularity('month')}>Mês</button></div></div>
+        <DashboardBarChart data={groupedActivity} field="count" max={maxCount} format={(value) => Number(value).toLocaleString('pt-BR')} tint="blue" ariaLabel="Quantidade de fretes por período" />
       </section>
-      <section className="panel dashboard-driver-panel">
-        <div className="panel-heading"><div><h2>Resumo por motorista</h2><p>Entregas, peso e valor líquido no filtro atual</p></div></div>
-        {byDriver.length ? <div className="table-wrap"><table><thead><tr><th>MOTORISTA</th><th>ENTREGAS</th><th>PESO</th><th>LÍQUIDO</th></tr></thead><tbody>{byDriver.map((item) => <tr key={item.name}><td><strong>{item.name}</strong></td><td>{item.count}</td><td>{formatWeight(item.weight)}</td><td><strong>{money(item.total)}</strong></td></tr>)}</tbody></table></div> : <div className="empty-state">Nenhuma entrega encontrada neste período.</div>}
+      <section className="panel dashboard-status-panel">
+        <div className="panel-heading"><div><h2>Status dos tickets</h2><p>Distribuição dentro dos filtros atuais</p></div></div>
+        <div className="dashboard-status-layout"><div className="dashboard-donut" role="img" aria-label={`${statusCounts.open} abertos, ${statusCounts.closing} em fechamento e ${statusCounts.sent} solicitados por e-mail`} style={{ background: donutGradient }}><div><strong>{statusTotal.toLocaleString('pt-BR')}</strong><span>tickets</span></div></div><div className="dashboard-status-legend"><StatusLegend color="blue" label="Abertos" value={statusCounts.open} /><StatusLegend color="amber" label="Em fechamento / envio" value={statusCounts.closing} /><StatusLegend color="green" label="Solicitados por e-mail" value={statusCounts.sent} /></div></div>
       </section>
     </div>
-    <div className="dashboard-grid">
-      <section className="panel recent-panel">
-        <div className="panel-heading"><div><h2>Tickets recentes</h2><p>{recentTickets.length} lançamento(s) mais recentes dentro do filtro</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
-        <TicketTable tickets={recentTickets} onView={onView} onEdit={onEdit} />
+
+    <div className="dashboard-grid dashboard-analytics-grid">
+      <section className="panel dashboard-chart-panel">
+        <div className="panel-heading"><div><h2>Peso transportado</h2><p>Total por {chartFormat === 'day' ? 'dia' : chartFormat === 'week' ? 'semana' : 'mês'} · exibindo os períodos mais recentes</p></div></div>
+        <DashboardBarChart data={groupedActivity} field="weight" max={maxWeight} format={formatWeight} tint="violet" ariaLabel="Peso transportado por período" />
       </section>
-      <section className="panel quick-panel">
-        <div className="panel-heading"><div><h2>Acesso rápido</h2><p>Atalhos da operação</p></div></div>
-        <button className="quick-link" onClick={() => goTo('tickets')}><span className="quick-icon blue"><Plus size={17} /></span><span><strong>Registrar ticket</strong><small>Novo lançamento de frete</small></span><ArrowUpRight size={16} /></button>
-        <button className="quick-link" onClick={() => goTo('fechamentos')}><span className="quick-icon violet"><BadgeDollarSign size={17} /></span><span><strong>Gerar fechamento</strong><small>Consolidar por motorista</small></span><ArrowUpRight size={16} /></button>
-        {isAdmin && <button className="quick-link" onClick={() => goTo('motoristas')}><span className="quick-icon green"><Users size={17} /></span><span><strong>Ver motoristas</strong><small>Consultar cadastros</small></span><ArrowUpRight size={16} /></button>}
-        <div className="sync-card"><div className="sync-symbol"><Settings2 size={17} /></div><div><strong>Sincronização em tempo real</strong><span>Será ativada ao conectar a nuvem</span></div></div>
+      <section className="panel dashboard-ranking-panel">
+        <div className="panel-heading"><div><h2>Ranking de motoristas</h2><p>Entregas, peso e valor líquido no período</p></div></div>
+        <div className="dashboard-rank-switch" aria-label="Ordenar ranking"><button className={rankingMetric === 'count' ? 'active' : ''} onClick={() => setRankingMetric('count')}>Fretes</button><button className={rankingMetric === 'weight' ? 'active' : ''} onClick={() => setRankingMetric('weight')}>Peso</button><button className={rankingMetric === 'amount' ? 'active' : ''} onClick={() => setRankingMetric('amount')}>Valor</button></div>
+        {rankingRows.length ? <div className="table-wrap"><table><thead><tr><th>MOTORISTA</th><th>FRETES</th><th>PESO</th><th>VALOR</th></tr></thead><tbody>{rankingRows.map((row, index) => <tr key={row.name}><td><span className="dashboard-rank-number">{index + 1}</span><strong>{row.name}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td><strong>{money(row.amount)}</strong></td></tr>)}</tbody></table></div> : <div className="empty-state">Nenhum motorista encontrado para o período.</div>}
       </section>
     </div>
+
+    <section className="panel recent-panel dashboard-recent-panel">
+      <div className="panel-heading dashboard-recent-heading"><div><h2>Tickets recentes</h2><p>Ordenados pela data mais recente · {filteredTickets.length.toLocaleString('pt-BR')} registros no filtro</p></div><div className="dashboard-recent-actions"><label className="search-box"><Search size={15} /><input value={recentQuery} onChange={(event) => setRecentQuery(event.target.value)} placeholder="Buscar ticket ou motorista" aria-label="Buscar ticket ou motorista" /></label><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div></div>
+      {recentTickets.length ? <TicketTable tickets={recentTickets} onView={onView} onEdit={onEdit} /> : <div className="empty-state">Nenhum ticket encontrado com os filtros atuais.</div>}
+      <div className="dashboard-data-note"><CircleHelp size={15} /><span>A tabela usa os dados disponíveis: ticket, data, motorista, placa, peso, valor e status. NF, cliente e ordem de entrega ainda não são registrados.</span></div>
+    </section>
   </>;
 }
 
+function DashboardBarChart({ data, field, max, format, tint, ariaLabel }) {
+  if (!data.length) return <div className="empty-state">Nenhum ticket encontrado neste período.</div>;
+  return <div className="dashboard-chart-scroll"><div className="dashboard-bar-chart" role="img" aria-label={ariaLabel}>
+    {data.map((item) => <div className="dashboard-bar-column" key={item.key} title={`${item.label}: ${format(item[field])}`}><span className="dashboard-bar-value">{format(item[field])}</span><div className="dashboard-bar-stage"><div className={`dashboard-bar-fill ${tint}`} style={{ height: `${Math.max(item[field] > 0 ? 3 : 0, item[field] / max * 100)}%` }} /></div><span className="dashboard-bar-label">{item.label}</span></div>)}
+  </div></div>;
+}
+
+function StatusLegend({ color, label, value }) {
+  return <div className="dashboard-legend-row"><span className={`dashboard-legend-dot ${color}`} /><span>{label}</span><strong>{Number(value).toLocaleString('pt-BR')}</strong></div>;
+}
 function Metric({ icon: Icon, label, value, tint, foot }) {
   return <div className="metric-card"><div className={`metric-icon ${tint}`}><Icon size={19} strokeWidth={1.9} /></div><span className="metric-label">{label}</span><strong className="metric-value">{value}</strong><span className="metric-foot">{foot}</span></div>;
 }

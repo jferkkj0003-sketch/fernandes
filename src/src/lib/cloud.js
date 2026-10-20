@@ -104,22 +104,31 @@ export function onAuthChange(callback) {
   return supabase.auth.onAuthStateChange((_event, session) => callback(session));
 }
 
+async function fetchAllRows(queryFactory, pageSize = 1000) {
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await queryFactory().range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
 export async function loadCloudData() {
   const [driverResult, ticketResult, closureResult] = await Promise.all([
-    supabase.from('drivers').select('*').order('name'),
-    supabase.from('tickets').select('*, driver:drivers(name)').order('date', { ascending: false }).order('created_at', { ascending: false }),
-    supabase.from('closures').select('*').order('number', { ascending: false }),
+    fetchAllRows(() => supabase.from('drivers').select('*').order('name').order('id')),
+    fetchAllRows(() => supabase.from('tickets').select('*, driver:drivers(name)').order('date', { ascending: false }).order('created_at', { ascending: false }).order('id')),
+    fetchAllRows(() => supabase.from('closures').select('*').order('number', { ascending: false }).order('id')),
   ]);
-  const error = driverResult.error || ticketResult.error || closureResult.error;
-  if (error) throw error;
-  const closures = closureResult.data.map(mapClosure);
+  const closures = closureResult.map(mapClosure);
   const closureStatuses = new Map(closures.map((closure) => [closure.id, closure.status]));
-  const tickets = ticketResult.data.map(mapTicket).map((ticket) => ({
+  const tickets = ticketResult.map(mapTicket).map((ticket) => ({
     ...ticket,
     requestStatus: closureStatuses.get(ticket.closureId) || ticket.status,
   }));
   return {
-    drivers: driverResult.data.map(mapDriver),
+    drivers: driverResult.map(mapDriver),
     tickets,
     closures,
   };
