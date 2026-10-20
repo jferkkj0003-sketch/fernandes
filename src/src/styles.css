@@ -183,3 +183,5 @@
 
 
 .shared-open-metric{border-left:4px solid #e5a631}.shared-open-metric>strong{font-size:clamp(24px,3vw,32px);overflow-wrap:anywhere}.shared-open-metric .shared-metric-label{font-weight:700}
+
+.shared-dashboard{max-width:1440px}.shared-open-description{font-size:14px;line-height:1.6;color:var(--muted)}.shared-metric-label{font-size:13px}.shared-metric small{font-size:12px}.shared-metric strong{font-size:28px}.shared-ranking h2{font-size:19px}.shared-payment-panel table{min-width:650px;width:100%;font-size:14px}.shared-payment-panel th{font-size:11px}.shared-payment-amount{font-size:19px;white-space:nowrap}.shared-payment-description{font-size:14px}.shared-driver-select select,.shared-range-tabs button{font-size:13px}.shared-payment-panel tfoot td,.shared-payment-panel tfoot th{padding-top:20px;padding-bottom:20px}.shared-weight-item{font-size:14px}@media(max-width:650px){.shared-metrics{grid-template-columns:1fr}.shared-metric{min-height:125px}.shared-metric strong{font-size:28px}.shared-payment-panel table{font-size:12px}.shared-payment-amount{font-size:16px}}
