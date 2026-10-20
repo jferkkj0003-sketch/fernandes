@@ -27,18 +27,23 @@ function DriverRanking({ title, metric, rows, value, formatter, tint }) {
   </section>;
 }
 
-function DriverPaymentChart({ rows }) {
-  const ordered = [...rows].sort((a, b) => b.amount - a.amount || a.driver.localeCompare(b.driver, 'pt-BR'));
-  const max = Math.max(1, ...ordered.flatMap((row) => [row.amount, row.openAmount]));
-  return <section className="shared-ranking shared-payment-chart" aria-label="Gráfico de valores por motorista">
-    <h2>Valores por motorista</h2>
-    <p className="shared-payment-description">Compare o total líquido dos tickets e a parte que ainda está em aberto no período filtrado.</p>
-    <div className="payment-chart-legend"><span><i className="payment-total-key" />Total líquido</span><span><i className="payment-open-key" />Em aberto</span></div>
-    {ordered.length ? <div className="payment-chart-rows">{ordered.map((row) => <div className="payment-chart-row" key={row.driver}>
-      <strong className="payment-chart-driver">{row.driver}</strong>
-      <div className="payment-chart-series"><span className="payment-chart-label">Total líquido</span><div className="payment-chart-track"><div className="payment-chart-bar payment-total-key" style={{ width: `${Math.max(0, row.amount) / max * 100}%` }} /></div><strong>{money(row.amount)}</strong></div>
-      <div className="payment-chart-series"><span className="payment-chart-label">Em aberto</span><div className="payment-chart-track"><div className="payment-chart-bar payment-open-key" style={{ width: `${Math.max(0, row.openAmount) / max * 100}%` }} /></div><strong>{money(row.openAmount)}</strong></div>
-    </div>)}</div> : <p className="shared-empty">Nenhum registro para os filtros selecionados.</p>}
+function DriverWeightDonut({ rows }) {
+  const weighted = [...rows].filter((row) => row.weight > 0).sort((a, b) => b.weight - a.weight);
+  const total = weighted.reduce((sum, row) => sum + row.weight, 0);
+  const colors = ['#3478ea', '#2a9b72', '#e5a631', '#8b6bd6', '#e16c55', '#28a6b5', '#ce6ba5', '#8291a5'];
+  let position = 0;
+  const gradient = weighted.map((row, index) => {
+    const start = position;
+    position += row.weight / total * 100;
+    return `${colors[index % colors.length]} ${start}% ${position}%`;
+  }).join(', ');
+  return <section className="shared-ranking shared-weight-panel">
+    <h2>Peso por motorista</h2>
+    <p className="shared-payment-description">Distribuição do peso transportado conforme o motorista e o período selecionados.</p>
+    {total > 0 ? <div className="shared-weight-layout">
+      <div className="shared-weight-donut" role="img" aria-label={`Peso total: ${formatWeight(total)}. ${weighted.map((row) => `${row.driver}: ${formatWeight(row.weight)}`).join('; ')}`} style={{ background: `conic-gradient(${gradient})` }}><div><strong>{formatWeight(total)}</strong><span>Peso total</span></div></div>
+      <div className="shared-weight-legend">{weighted.map((row, index) => <div className="shared-weight-item" key={row.driver}><span className="shared-weight-swatch" style={{ background: colors[index % colors.length] }} /><strong>{row.driver}</strong><div><b>{formatWeight(row.weight)}</b><small>{(row.weight / total * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</small></div></div>)}</div>
+    </div> : <p className="shared-empty">Nenhum peso registrado para os filtros selecionados.</p>}
   </section>;
 }
 
@@ -155,7 +160,7 @@ export default function SharedDashboard({ token }) {
           <Metric icon={ClipboardList} label="Fechamentos aguardando envio" value={summary.awaitingCount.toLocaleString('pt-BR')} foot={`${money(summary.awaitingAmount)} em fechamentos`} tint="violet" />
           <Metric icon={Check} label="Fechamentos solicitados" value={summary.requestedCount.toLocaleString('pt-BR')} foot={`${money(summary.requestedAmount)} em fechamentos`} tint="blue" />
         </section>
-        <DriverPaymentChart rows={summary.ranked} />
+        <DriverWeightDonut rows={summary.ranked} />
         <section className="shared-ranking shared-payment-panel">
           <h2>Valores por motorista para pagamento</h2>
           <p className="shared-payment-description">Confira o valor líquido e o peso de cada motorista no período selecionado. Os valores em aberto ainda aguardam fechamento.</p>
