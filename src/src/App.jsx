@@ -263,7 +263,7 @@ export default function App() {
   const [tickets, setTickets] = useState(initialTickets);
   const [drivers, setDrivers] = useState(initialDrivers);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('Todos');
+  const [filter, setFilter] = useState('Aberto');
   const [closures, setClosures] = useState([]);
   const [closureSequence, setClosureSequence] = useState(1);
   const [notice, setNotice] = useState('');
@@ -1136,15 +1136,15 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
   </>;
 }
 
-function OpenTicketTotals({ tickets, selected = false }) {
+function OpenTicketTotals({ tickets, selected = false, filtered = false }) {
   const totals = tickets.reduce((sum, ticket) => ({
     amount: sum.amount + Number(ticket.gross || 0) - Number(ticket.discount || 0),
     weight: sum.weight + Number(ticket.weight || 0),
   }), { amount: 0, weight: 0 });
   return <div className="open-ticket-totals" aria-live="polite" aria-label={selected ? 'Totais selecionados para fechamento' : 'Totais dos tickets em aberto'}>
-    <Metric icon={ClipboardList} label={selected ? 'Tickets selecionados' : 'Tickets em aberto'} value={tickets.length.toLocaleString('pt-BR')} tint="amber" foot={selected ? 'Incluídos neste fechamento' : 'Conforme motorista e período'} />
-    <Metric icon={BadgeDollarSign} label={selected ? 'Total a pagar selecionado' : 'Total a pagar em aberto'} value={money(totals.amount)} tint="green" foot="Valor líquido após descontos" />
-    <Metric icon={Truck} label={selected ? 'Peso total selecionado' : 'Peso total em aberto'} value={`${totals.weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`} tint="violet" foot="Soma do peso dos tickets" />
+    <Metric icon={ClipboardList} label={selected ? 'Tickets selecionados' : filtered ? 'Tickets filtrados' : 'Tickets em aberto'} value={tickets.length.toLocaleString('pt-BR')} tint="amber" foot={selected ? 'Incluídos neste fechamento' : 'Conforme motorista e período'} />
+    <Metric icon={BadgeDollarSign} label={selected ? 'Total a pagar selecionado' : filtered ? 'Valor líquido dos tickets' : 'Total a pagar em aberto'} value={money(totals.amount)} tint="green" foot="Valor líquido após descontos" />
+    <Metric icon={Truck} label={selected ? 'Peso total selecionado' : filtered ? 'Peso total dos tickets' : 'Peso total em aberto'} value={`${totals.weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`} tint="violet" foot="Soma do peso dos tickets" />
   </div>;
 }
 
@@ -1161,6 +1161,9 @@ function Metric({ icon: Icon, label, value, tint, foot }) {
 
 function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, canDeleteTicket, saving }) {
   const [scanName, setScanName] = useState('');
+  const [ticketDriver, setTicketDriver] = useState('');
+  const driverOptions = [...new Set([...drivers.map((item) => item.name), ...tickets.map((item) => item.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const listedTickets = tickets.filter((ticket) => !ticketDriver || ticket.driver === ticketDriver);
   const handleTicketSubmit = async (event) => {
     const form = event.currentTarget;
     await onSave(event);
@@ -1193,8 +1196,9 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
     </section>
     <section className="panel list-panel">
       <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={() => window.alert('A exportação será conectada em uma etapa futura.')}><ArrowDownToLine size={16} /> Exportar</button></div>
-      <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
-      <TicketTable tickets={tickets} onView={onView} onEdit={onEdit} onDelete={onDelete} canDeleteTicket={canDeleteTicket} />
+      <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select ticket-driver-filter" aria-label="Filtrar por motorista" value={ticketDriver} onChange={(event) => setTicketDriver(event.target.value)}><option value="">Todos os motoristas</option>{driverOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select><select className="filter-select" aria-label="Filtrar por status" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
+      <OpenTicketTotals tickets={listedTickets} filtered={filter !== 'Aberto'} />
+      <TicketTable tickets={listedTickets} onView={onView} onEdit={onEdit} onDelete={onDelete} canDeleteTicket={canDeleteTicket} />
     </section>
   </>;
 }
