@@ -1,3 +1,4 @@
+import ResponsiveTable from './ResponsiveTable';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, ClipboardList, CreditCard, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
@@ -110,11 +111,11 @@ export default function SharedDashboard({ token }) {
     };
   }, [data, period, driverFilter, openOnly]);
 
-  if (loading) return <main className="shared-stage"><section className="shared-card"><img src="/logo-controle-de-fretes.svg" alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
+  if (loading) return <main className="shared-stage"><section className="shared-card"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
 
   return <main className="shared-dashboard">
-    <header className="shared-header"><div className="shared-header-brand"><img src="/logo-controle-de-fretes.svg" alt="Controle de Fretes" /><div><span>PAINEL DE ACOMPANHAMENTO</span><h1>Controle de fretes</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
+    <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><span>PAINEL DE ACOMPANHAMENTO</span><h1>Controle de fretes</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
     <nav className="shared-view-tabs" aria-label="Visão do acompanhamento"><button className={openOnly ? 'active' : ''} aria-pressed={openOnly} onClick={() => setView('open')}><ClipboardList size={18} /><span>Em aberto<small>Conferir o que falta pagar</small></span></button><button className={!openOnly ? 'active' : ''} aria-pressed={!openOnly} onClick={() => setView('all')}><Truck size={18} /><span>Visão geral<small>Todos os tickets, abertos e fechados</small></span></button></nav>
     <section className="shared-toolbar">
       <div className="shared-range-tabs" aria-label="Filtrar período">
@@ -141,10 +142,11 @@ export default function SharedDashboard({ token }) {
         <section className="shared-ranking shared-payment-panel">
           <h2>{openOnly ? 'Quanto pagar por motorista' : 'Resultado por motorista'}</h2>
           <p className="shared-payment-description">{openOnly ? 'Quantidade, peso e valor líquido apenas dos tickets em aberto.' : 'Todos os tickets do filtro. O valor total inclui os já fechados.'}</p>
-          {summary.ranked.length ? <div className="table-wrap"><table><thead><tr><th>MOTORISTA</th><th>{openOnly ? 'TICKETS EM ABERTO' : 'TICKETS'}</th><th>{openOnly ? 'PESO EM ABERTO' : 'PESO TOTAL'}</th><th>{openOnly ? 'TOTAL A PAGAR' : 'VALOR LÍQUIDO'}</th></tr></thead><tbody>{summary.ranked.map((row) => <tr key={row.driver}><td><strong>{row.driver}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td className="shared-payment-amount"><strong>{money(row.amount)}</strong></td></tr>)}</tbody><tfoot><tr><th>{openOnly ? 'TOTAL EM ABERTO' : 'TOTAL GERAL'}</th><td>{summary.ticketCount.toLocaleString('pt-BR')}</td><td>{formatWeight(summary.weight)}</td><td className="shared-payment-amount"><strong>{money(summary.amount)}</strong></td></tr></tfoot></table></div> : <p className="shared-empty">Nenhum ticket para os filtros selecionados.</p>}
+          {summary.ranked.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>MOTORISTA</th><th>{openOnly ? 'TICKETS EM ABERTO' : 'TICKETS'}</th><th>{openOnly ? 'PESO EM ABERTO' : 'PESO TOTAL'}</th><th>{openOnly ? 'TOTAL A PAGAR' : 'VALOR LÍQUIDO'}</th></tr></thead><tbody>{summary.ranked.map((row) => <tr key={row.driver}><td><strong>{row.driver}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td className="shared-payment-amount"><strong>{money(row.amount)}</strong></td></tr>)}</tbody><tfoot><tr><th>{openOnly ? 'TOTAL EM ABERTO' : 'TOTAL GERAL'}</th><td>{summary.ticketCount.toLocaleString('pt-BR')}</td><td>{formatWeight(summary.weight)}</td><td className="shared-payment-amount"><strong>{money(summary.amount)}</strong></td></tr></tfoot></ResponsiveTable></div> : <p className="shared-empty">Nenhum ticket para os filtros selecionados.</p>}
         </section>
         <DriverWeightDonut rows={summary.ranked} openOnly={openOnly} />
       </>}
     <footer className="shared-footer">Dados atualizados ao abrir ou atualizar este painel · Acesso somente para consulta</footer>
   </main>;
 }
+

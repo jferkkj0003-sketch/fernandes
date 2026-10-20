@@ -9,6 +9,7 @@ import {
   onAuthChange, requestCloudClosure, saveCloudDriver, saveCloudTicket,
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
+import ResponsiveTable from './ResponsiveTable';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 
 const initialTickets = [
@@ -299,6 +300,24 @@ export default function App() {
   const [driverActiveBusy, setDriverActiveBusy] = useState(false);
   const [closureToEdit, setClosureToEdit] = useState(null);
   const scanPrefetchSignature = useRef('');
+
+  useEffect(() => {
+    if (!mobileNav) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setMobileNav(false); };
+    const mobileMedia = window.matchMedia('(max-width: 800px)');
+    const closeOnDesktop = () => { if (!mobileMedia.matches) setMobileNav(false); };
+    document.addEventListener('keydown', closeOnEscape);
+    mobileMedia.addEventListener('change', closeOnDesktop);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+      mobileMedia.removeEventListener('change', closeOnDesktop);
+    };
+  }, [mobileNav]);
+
+
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -754,6 +773,7 @@ export default function App() {
   }
 
   async function exitAccount() {
+    setMobileNav(false);
     if (cloudConfigured && sessionUser) {
       const { error } = await signOut();
       if (error) setNotice('Não foi possível sair da conta.');
@@ -910,13 +930,13 @@ export default function App() {
 
   return (
     <div className="app-frame">
-      {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
-      {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
+      {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
+      {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
       {authReady && showLogin ? (
         <main className="login-stage">
           <section className="login-card">
             <p className="eyebrow">CONTROLE DE OPERAÇÃO</p>
-            <img className="login-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" />
+            <img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
             <p className="login-copy">Entre para acompanhar lançamentos, fechamentos e solicitações.</p>
             <form className="login-form" onSubmit={async (event) => {
               event.preventDefault();
@@ -959,9 +979,9 @@ export default function App() {
         </main>
       ) : authReady && !showLogin && (!cloudConfigured || cloudDataReady) ? (
         <>
-          <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
+          <aside id="main-navigation" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
             <div className="brand-row">
-              <img className="brand-logo" src="/logo-controle-de-fretes.svg" alt="Gestão de Frete" />
+              <img className="brand-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
               <button className="icon-button close-mobile" aria-label="Fechar menu" onClick={() => setMobileNav(false)}><X size={18} /></button>
             </div>
             <div className="workspace-label">MENU PRINCIPAL</div>
@@ -982,11 +1002,11 @@ export default function App() {
           <main className="main-area">
             <header className="topbar">
               <div className="topbar-left">
-                <button className="icon-button mobile-menu" aria-label="Abrir menu" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
-                <div className="breadcrumb">Operação <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label || 'Início'}</strong></div>
+                <button className="icon-button mobile-menu" aria-label="Abrir menu" aria-expanded={mobileNav} aria-controls="main-navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
+                <div className="breadcrumb"><span className="breadcrumb-root">Operação <span>/</span></span><strong>{navItems.find((item) => item.id === page)?.label || 'Início'}</strong></div>
               </div>
               <div className="topbar-right">
-                <span className={`prototype-pill ${syncState}`}><span className="status-dot amber" /> {syncState === 'online' ? 'Nuvem conectada' : syncState === 'connecting' ? 'Conectando à nuvem' : syncState === 'error' ? 'Erro na nuvem' : 'Demonstração local'}</span>
+                <span className={`prototype-pill ${syncState}`}><span className="status-dot amber" /><span className="sync-label">{syncState === 'online' ? 'Nuvem conectada' : syncState === 'connecting' ? 'Conectando à nuvem' : syncState === 'error' ? 'Erro na nuvem' : 'Demonstração local'}</span></span>
                 {scanPrefetchProgress && <span className="scan-prefetch-pill" role="status"><RefreshCw size={14} aria-hidden="true" />Sincronizando</span>}
                 <button className="icon-button theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
                 <button className="icon-button notification-button" aria-label="Notificações"><Bell size={18} /><i /></button>
@@ -1208,7 +1228,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
 }
 
 function TicketTable({ tickets, onView, onEdit, onDelete, canDeleteTicket, compact = false }) {
-  return <div className="table-wrap"><table><thead><tr><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PLACA</th>{!compact && <th>PESO</th>}<th>LÍQUIDO</th><th>STATUS</th>{!compact && <th></th>}</tr></thead><tbody>
+  return <div className="table-wrap"><ResponsiveTable><thead><tr><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PLACA</th>{!compact && <th>PESO</th>}<th>LÍQUIDO</th><th>STATUS</th>{!compact && <th></th>}</tr></thead><tbody>
     {tickets.length ? tickets.map((ticket) => {
       const requestStatus = ticket.requestStatus || ticket.status;
       const requested = requestStatus === 'Solicitado';
@@ -1224,7 +1244,7 @@ function TicketTable({ tickets, onView, onEdit, onDelete, canDeleteTicket, compa
         </tr>
       );
     }) : <tr className="ticket-empty-row"><td colSpan={compact ? 6 : 8} className="empty-state">Nenhum ticket encontrado com esse filtro.</td></tr>}
-  </tbody></table></div>;
+  </tbody></ResponsiveTable></div>;
 }
 
 const ticketHistoryLabels = {
@@ -1546,12 +1566,12 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
         <OpenTicketTotals tickets={selectedMatches} selected />
         <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Todos os abertos do filtro: <strong>{money(matches.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))}</strong> · {matches.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0).toLocaleString('pt-BR')} kg</span></div>
         <div className="selection-toolbar"><button className="text-button" onClick={() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id)))}>Selecionar todos</button><button className="text-button" onClick={() => setSelectedTicketIds(new Set())}>Limpar seleção</button></div>
-        <div className="table-wrap closure-results"><table><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td></tr>)}</tbody></table></div>
+        <div className="table-wrap closure-results"><ResponsiveTable><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><label className="closure-ticket-select"><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></label></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td></tr>)}</tbody></ResponsiveTable></div>
         <div className="closure-action"><span>O fechamento será somente de {drivers.find((option) => option.key === driver)?.name} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
       </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket aberto encontrado nesse período. Os resultados mudam automaticamente ao alterar os filtros.</span></div>}
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
-      {pendingClosures.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></table></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
+      {pendingClosures.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
     </section>
   </>;
 }
@@ -1607,7 +1627,7 @@ function ClosurePreviewModal({ closure, onClose, onDownload }) {
     <section className="edit-modal closure-preview" role="dialog" aria-modal="true" aria-labelledby="closure-preview-title">
       <div className="panel-heading"><div><p className="eyebrow">PRÉVIA DO DOCUMENTO</p><h2 id="closure-preview-title">Fechamento {closure.number} · {closure.driver}</h2><p>Período {formatDate(closure.start)} a {formatDate(closure.end)}</p></div><button className="icon-button" aria-label="Fechar" onClick={onClose}><X size={18} /></button></div>
       <div className="preview-section"><h3>Dados do motorista e pagamento</h3><div className="preview-driver-grid"><div><span>Nome completo</span><strong>{driver.fullName}</strong></div><div><span>CPF</span><strong>{driver.cpf}</strong></div><div><span>Placa</span><strong>{driver.plate}</strong></div><div><span>Chave PIX</span><strong>{driver.pix}</strong></div><div><span>Banco</span><strong>{driver.bank}</strong></div><div><span>Tipo de conta</span><strong>{driver.accountType}</strong></div><div><span>Agência</span><strong>{driver.branch}</strong></div><div><span>Conta</span><strong>{driver.account}</strong></div></div></div>
-      <div className="preview-section"><h3>Tickets do fechamento</h3><div className="table-wrap"><table><thead><tr><th>DATA</th><th>TICKET</th><th>PESO</th><th>LÍQUIDO</th><th>OBSERVAÇÃO</th></tr></thead><tbody>{(closure.ticketDetails || []).map((ticket) => <tr key={ticket.id}><td>{ticket.date}</td><td>{ticket.number}</td><td>{Number(ticket.weight || 0).toLocaleString('pt-BR')} kg</td><td>{money(ticket.gross - ticket.discount)}</td><td>{ticket.note || '—'}</td></tr>)}</tbody></table></div></div>
+      <div className="preview-section"><h3>Tickets do fechamento</h3><div className="table-wrap"><ResponsiveTable><thead><tr><th>DATA</th><th>TICKET</th><th>PESO</th><th>LÍQUIDO</th><th>OBSERVAÇÃO</th></tr></thead><tbody>{(closure.ticketDetails || []).map((ticket) => <tr key={ticket.id}><td>{ticket.date}</td><td>{ticket.number}</td><td>{Number(ticket.weight || 0).toLocaleString('pt-BR')} kg</td><td>{money(ticket.gross - ticket.discount)}</td><td>{ticket.note || '—'}</td></tr>)}</tbody></ResponsiveTable></div></div>
       <div className="preview-total"><span>Total líquido</span><strong>{money(closure.total)}</strong></div>
       <div className="form-actions"><button className="button secondary" type="button" onClick={onClose}>Fechar prévia</button><button className="button primary" type="button" onClick={() => onDownload(closure)}><ArrowDownToLine size={16} /> Baixar PDF</button></div>
     </section>
@@ -1621,7 +1641,7 @@ function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload,
   return <><PageHeading eyebrow="CONSULTA" title="Histórico" subtitle="Consulte os fechamentos anteriores e acompanhe o status do envio." />
     <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Os pendentes de envio aparecem primeiro; marque quando o e-mail for enviado.</p></div></div>
-      {ordered.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de remoção encerrado após 5 dias.' : 'Os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
+      {ordered.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de remoção encerrado após 5 dias.' : 'Os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
     </section>
   </>;
 }
