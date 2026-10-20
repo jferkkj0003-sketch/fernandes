@@ -152,16 +152,16 @@ export default function SharedDashboard({ token }) {
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
-        <section className="shared-open-payment" aria-live="polite">
-          <span>EM ABERTO PARA PAGAR</span>
-          <strong>{money(summary.openAmount)}</strong>
-          <p>{summary.openCount.toLocaleString('pt-BR')} ticket(s) em aberto · {driverFilter || 'Todos os motoristas'}</p>
-        </section>
         <section className="shared-metrics">
           <Metric icon={Truck} label="Entregas" value={summary.ticketCount.toLocaleString('pt-BR')} foot="Tickets registrados no período" tint="blue" />
           <Metric icon={Weight} label="Peso total" value={formatWeight(summary.weight)} foot="Peso das entregas no período" tint="violet" />
           <Metric icon={CreditCard} label="Valor total" value={money(summary.amount)} foot="Valor líquido dos tickets" tint="green" />
-          <Metric icon={ClipboardList} label="Tickets em aberto" value={summary.openCount.toLocaleString('pt-BR')} foot={`${money(summary.openAmount)} aguardando fechamento`} tint="amber" />
+          <article className="shared-metric shared-open-metric" aria-live="polite">
+            <span className="shared-metric-icon amber"><ClipboardList size={18} /></span>
+            <span className="shared-metric-label">Tickets em aberto</span>
+            <strong>{money(summary.openAmount)}</strong>
+            <small>Em aberto para pagar · {summary.openCount.toLocaleString('pt-BR')} ticket(s)</small>
+          </article>
           <Metric icon={ClipboardList} label="Fechamentos aguardando envio" value={summary.awaitingCount.toLocaleString('pt-BR')} foot={`${money(summary.awaitingAmount)} em fechamentos`} tint="violet" />
           <Metric icon={Check} label="Fechamentos solicitados" value={summary.requestedCount.toLocaleString('pt-BR')} foot={`${money(summary.requestedAmount)} em fechamentos`} tint="blue" />
         </section>
