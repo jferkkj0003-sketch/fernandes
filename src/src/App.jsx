@@ -1129,9 +1129,23 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
 
     <section className="panel recent-panel dashboard-recent-panel">
       <div className="panel-heading dashboard-recent-heading"><div><h2>Tickets em aberto</h2><p>{openTickets.length.toLocaleString('pt-BR')} aguardando fechamento no período filtrado</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
+      <div className="open-ticket-toolbar"><label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><span>Segue o período selecionado nos filtros do painel.</span></div>
+      <OpenTicketTotals tickets={openTickets} />
       {openTickets.length ? <TicketTable tickets={openTickets} onView={onView} onEdit={onEdit} /> : <div className="empty-state">Nenhum ticket em aberto para este período.</div>}
     </section>
   </>;
+}
+
+function OpenTicketTotals({ tickets, selected = false }) {
+  const totals = tickets.reduce((sum, ticket) => ({
+    amount: sum.amount + Number(ticket.gross || 0) - Number(ticket.discount || 0),
+    weight: sum.weight + Number(ticket.weight || 0),
+  }), { amount: 0, weight: 0 });
+  return <div className="open-ticket-totals" aria-live="polite" aria-label={selected ? 'Totais selecionados para fechamento' : 'Totais dos tickets em aberto'}>
+    <Metric icon={ClipboardList} label={selected ? 'Tickets selecionados' : 'Tickets em aberto'} value={tickets.length.toLocaleString('pt-BR')} tint="amber" foot={selected ? 'Incluídos neste fechamento' : 'Conforme motorista e período'} />
+    <Metric icon={BadgeDollarSign} label={selected ? 'Total a pagar selecionado' : 'Total a pagar em aberto'} value={money(totals.amount)} tint="green" foot="Valor líquido após descontos" />
+    <Metric icon={Truck} label={selected ? 'Peso total selecionado' : 'Peso total em aberto'} value={`${totals.weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`} tint="violet" foot="Soma do peso dos tickets" />
+  </div>;
 }
 
 function DashboardBarChart({ data, field, max, format, tint, ariaLabel }) {
@@ -1521,7 +1535,8 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
     <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista e o período. Cada fechamento é individual.</p></div></div>
       <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><label>Data inicial<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>Data final<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>Selecione um motorista para ver os tickets disponíveis para fechar.</span></div> : !validRange ? <div className="empty-callout warning-callout"><CircleHelp size={18} /><span>A data inicial precisa ser anterior ou igual à data final.</span></div> : matches.length ? <>
-        <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Total selecionado: <strong>{money(selectedMatches.reduce((sum, ticket) => sum + ticket.gross - ticket.discount, 0))}</strong></span></div>
+        <OpenTicketTotals tickets={selectedMatches} selected />
+        <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Todos os abertos do filtro: <strong>{money(matches.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))}</strong> · {matches.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0).toLocaleString('pt-BR')} kg</span></div>
         <div className="selection-toolbar"><button className="text-button" onClick={() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id)))}>Selecionar todos</button><button className="text-button" onClick={() => setSelectedTicketIds(new Set())}>Limpar seleção</button></div>
         <div className="table-wrap closure-results"><table><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td></tr>)}</tbody></table></div>
         <div className="closure-action"><span>O fechamento será somente de {driver} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
