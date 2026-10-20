@@ -1,6 +1,7 @@
 /* Keep mobile layout rules together and leave desktop table layouts intact. */
 .breadcrumb .breadcrumb-root { padding: 0; color: inherit; }
 @media (max-width: 800px) {
+  body { min-width: 0; }
   .main-area, .content, .panel, .panel-heading > div,
   .ticket-form > *, .filter-fields > *, .edit-ticket-form > * { min-width: 0; }
   .sidebar {
