@@ -27,6 +27,21 @@ function DriverRanking({ title, metric, rows, value, formatter, tint }) {
   </section>;
 }
 
+function DriverPaymentChart({ rows }) {
+  const ordered = [...rows].sort((a, b) => b.amount - a.amount || a.driver.localeCompare(b.driver, 'pt-BR'));
+  const max = Math.max(1, ...ordered.flatMap((row) => [row.amount, row.openAmount]));
+  return <section className="shared-ranking shared-payment-chart" aria-label="Gráfico de valores por motorista">
+    <h2>Valores por motorista</h2>
+    <p className="shared-payment-description">Compare o total líquido dos tickets e a parte que ainda está em aberto no período filtrado.</p>
+    <div className="payment-chart-legend"><span><i className="payment-total-key" />Total líquido</span><span><i className="payment-open-key" />Em aberto</span></div>
+    {ordered.length ? <div className="payment-chart-rows">{ordered.map((row) => <div className="payment-chart-row" key={row.driver}>
+      <strong className="payment-chart-driver">{row.driver}</strong>
+      <div className="payment-chart-series"><span className="payment-chart-label">Total líquido</span><div className="payment-chart-track"><div className="payment-chart-bar payment-total-key" style={{ width: `${Math.max(0, row.amount) / max * 100}%` }} /></div><strong>{money(row.amount)}</strong></div>
+      <div className="payment-chart-series"><span className="payment-chart-label">Em aberto</span><div className="payment-chart-track"><div className="payment-chart-bar payment-open-key" style={{ width: `${Math.max(0, row.openAmount) / max * 100}%` }} /></div><strong>{money(row.openAmount)}</strong></div>
+    </div>)}</div> : <p className="shared-empty">Nenhum registro para os filtros selecionados.</p>}
+  </section>;
+}
+
 export default function SharedDashboard({ token }) {
   const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
   const [data, setData] = useState(null);
@@ -140,6 +155,7 @@ export default function SharedDashboard({ token }) {
           <Metric icon={ClipboardList} label="Fechamentos aguardando envio" value={summary.awaitingCount.toLocaleString('pt-BR')} foot={`${money(summary.awaitingAmount)} em fechamentos`} tint="violet" />
           <Metric icon={Check} label="Fechamentos solicitados" value={summary.requestedCount.toLocaleString('pt-BR')} foot={`${money(summary.requestedAmount)} em fechamentos`} tint="blue" />
         </section>
+        <DriverPaymentChart rows={summary.ranked} />
         <section className="shared-ranking shared-payment-panel">
           <h2>Valores por motorista para pagamento</h2>
           <p className="shared-payment-description">Confira o valor líquido e o peso de cada motorista no período selecionado. Os valores em aberto ainda aguardam fechamento.</p>
