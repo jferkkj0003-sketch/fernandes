@@ -1019,14 +1019,6 @@ function PageHeading({ eyebrow = 'VISÃO GERAL', title, subtitle, action }) {
   return <div className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>{action}</div>;
 }
 
-function shiftDashboardDate(value, days) {
-  if (!value) return '';
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 function dashboardTicketStatus(ticket) {
   if (ticket.requestStatus === 'Solicitado' || ticket.requestStatus === 'Aguardando envio') return ticket.requestStatus;
   return ticket.status || 'Aberto';
@@ -1043,6 +1035,7 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
   const [driverFilter, setDriverFilter] = useState('Todos');
   const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
   const [endDate, setEndDate] = useState(localToday);
+  const [chartGranularity, setChartGranularity] = useState('day');
   const drivers = useMemo(() => [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')), [driverRecords, tickets]);
   const invalidDateRange = Boolean(startDate && endDate && startDate > endDate);
   const filteredTickets = useMemo(() => invalidDateRange ? [] : tickets.filter((ticket) =>
@@ -1057,19 +1050,33 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
   const openTickets = useMemo(() => filteredTickets
     .filter((ticket) => dashboardTicketStatus(ticket) === 'Aberto')
     .sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || '') || (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0)), [filteredTickets]);
-  const setQuickPeriod = (period) => {
-    const today = localToday();
-    if (period === 'today') { setStartDate(today); setEndDate(today); }
-    else if (period === 'yesterday') { const day = shiftDashboardDate(today, -1); setStartDate(day); setEndDate(day); }
-    else if (period === '7') { setStartDate(shiftDashboardDate(today, -6)); setEndDate(today); }
-    else if (period === 'month') { setStartDate(`${today.slice(0, 7)}-01`); setEndDate(today); }
-    else if (period === 'previousMonth') {
-      const first = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 2, 1);
-      const last = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 0);
-      const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      setStartDate(iso(first)); setEndDate(iso(last));
-    } else { setStartDate(''); setEndDate(''); }
-  };
+  const chartData = useMemo(() => {
+    const groups = new Map();
+    for (const ticket of filteredTickets) {
+      if (!ticket.dateISO) continue;
+      let key = ticket.dateISO;
+      let label = formatDate(key).slice(0, 5);
+      if (chartGranularity === 'month') {
+        key = ticket.dateISO.slice(0, 7);
+        const [year, month] = key.split('-').map(Number);
+        label = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(new Date(year, month - 1, 1));
+      } else if (chartGranularity === 'week') {
+        const [year, month, day] = key.split('-').map(Number);
+        const weekStart = new Date(year, month - 1, day);
+        weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+        key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+        label = formatDate(key).slice(0, 5);
+      }
+      const group = groups.get(key) || { key, label, count: 0, weight: 0 };
+      group.count += 1;
+      group.weight += Number(ticket.weight || 0);
+      groups.set(key, group);
+    }
+    const maxPeriods = chartGranularity === 'day' ? 14 : 12;
+    return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key)).slice(-maxPeriods);
+  }, [filteredTickets, chartGranularity]);
+  const maxChartCount = Math.max(1, ...chartData.map((item) => item.count));
+  const maxChartWeight = Math.max(1, ...chartData.map((item) => item.weight));
   const formatWeight = formatDashboardWeight;
 
   return <>
@@ -1081,7 +1088,6 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
         <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
         <label>Data final<input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></label>
       </div>
-      <div className="selection-toolbar dashboard-periods"><span>Período rápido:</span><button className="text-button" onClick={() => setQuickPeriod('today')}>Hoje</button><button className="text-button" onClick={() => setQuickPeriod('7')}>Últimos 7 dias</button><button className="text-button" onClick={() => setQuickPeriod('month')}>Este mês</button><button className="text-button" onClick={() => setQuickPeriod('all')}>Todo o período</button></div>
       {invalidDateRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
     </section>
 
@@ -1092,11 +1098,29 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
       <Metric icon={ClipboardList} label="Tickets em aberto" value={openTickets.length.toLocaleString('pt-BR')} tint="amber" foot={`${money(openTickets.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))} aguardando fechamento`} />
     </section>
 
+    <section className="dashboard-charts" aria-label="Gráficos do período">
+      <div className="panel dashboard-chart-panel">
+        <div className="panel-heading dashboard-chart-heading"><div><h2>Fretes no período</h2><p>Quantidade por {chartGranularity === 'day' ? 'dia' : chartGranularity === 'week' ? 'semana' : 'mês'}</p></div><div className="dashboard-chart-switch" aria-label="Agrupar gráficos"><button className={chartGranularity === 'day' ? 'active' : ''} onClick={() => setChartGranularity('day')}>Dia</button><button className={chartGranularity === 'week' ? 'active' : ''} onClick={() => setChartGranularity('week')}>Semana</button><button className={chartGranularity === 'month' ? 'active' : ''} onClick={() => setChartGranularity('month')}>Mês</button></div></div>
+        <DashboardBarChart data={chartData} field="count" max={maxChartCount} format={(value) => Number(value).toLocaleString('pt-BR')} tint="blue" ariaLabel="Quantidade de fretes por período" />
+      </div>
+      <div className="panel dashboard-chart-panel">
+        <div className="panel-heading"><div><h2>Peso transportado</h2><p>Total por {chartGranularity === 'day' ? 'dia' : chartGranularity === 'week' ? 'semana' : 'mês'}</p></div></div>
+        <DashboardBarChart data={chartData} field="weight" max={maxChartWeight} format={formatWeight} tint="violet" ariaLabel="Peso transportado por período" />
+      </div>
+    </section>
+
     <section className="panel recent-panel dashboard-recent-panel">
       <div className="panel-heading dashboard-recent-heading"><div><h2>Tickets em aberto</h2><p>{openTickets.length.toLocaleString('pt-BR')} aguardando fechamento no período filtrado</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
       {openTickets.length ? <TicketTable tickets={openTickets} onView={onView} onEdit={onEdit} /> : <div className="empty-state">Nenhum ticket em aberto para este período.</div>}
     </section>
   </>;
+}
+
+function DashboardBarChart({ data, field, max, format, tint, ariaLabel }) {
+  if (!data.length) return <div className="empty-state">Sem dados para exibir neste período.</div>;
+  return <div className="dashboard-chart-scroll"><div className="dashboard-bar-chart" role="img" aria-label={ariaLabel}>
+    {data.map((item) => <div className="dashboard-bar-column" key={item.key} title={`${item.label}: ${format(item[field])}`}><span className="dashboard-bar-value">{format(item[field])}</span><div className="dashboard-bar-stage"><div className={`dashboard-bar-fill ${tint}`} style={{ height: `${Math.max(item[field] > 0 ? 3 : 0, item[field] / max * 100)}%` }} /></div><span className="dashboard-bar-label">{item.label}</span></div>)}
+  </div></div>;
 }
 
 function Metric({ icon: Icon, label, value, tint, foot }) {
