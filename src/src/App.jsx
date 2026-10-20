@@ -999,7 +999,7 @@ export default function App() {
               {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
               {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onDelete={removeDriver} />}
-              <footer className="content-footer"><span>Gestão de Frete</span><span>Os registros exibidos são fictícios</span></footer>
+              <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
