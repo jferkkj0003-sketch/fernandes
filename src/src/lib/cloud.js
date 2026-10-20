@@ -45,11 +45,12 @@ const formatDate = (value) => {
 const mapDriver = (row) => ({
   id: row.id, name: row.name, plate: row.plate || '', cpf: row.cpf || '', pix: row.pix || '',
   bank: row.bank || '', accountType: row.account_type || '', branch: row.branch || '', account: row.account || '',
-  defaultFare: Number(row.default_fare ?? 1000),
+  defaultFare: Number(row.default_fare ?? 1000), active: row.active !== false,
 });
 
 const mapTicket = (row) => ({
   id: row.id, createdAt: row.created_at || null, dateISO: row.date, date: formatDate(row.date), number: row.number,
+  driverId: row.driver_id || null,
   driver: row.driver?.name || row.driver_name || '', plate: row.plate || '', weight: Number(row.weight) || 0,
   gross: Number(row.gross) || 0, discount: Number(row.discount) || 0, note: row.note || '', status: row.status,
   closureId: row.closure_id || null,
@@ -57,7 +58,7 @@ const mapTicket = (row) => ({
 });
 
 const mapSnapshotTicket = (row) => ({
-  id: row.id, dateISO: row.date, date: formatDate(row.date), number: row.number,
+  id: row.id, driverId: row.driver_id || null, dateISO: row.date, date: formatDate(row.date), number: row.number,
   driver: row.driver || '', plate: row.plate || '', weight: Number(row.weight) || 0,
   gross: Number(row.gross) || 0, discount: Number(row.discount) || 0, note: row.note || '', status: row.status || 'No fechamento',
   scanPath: row.scan_path || null, scanName: row.scan_name || '', scanType: row.scan_type || '', scanSize: Number(row.scan_size) || 0,
@@ -65,9 +66,9 @@ const mapSnapshotTicket = (row) => ({
 
 const mapClosure = (row) => {
   const driver = row.driver_snapshot || {};
-  const ticketDetails = (row.tickets_snapshot || []).map(mapSnapshotTicket);
+  const ticketDetails = (row.tickets_snapshot || []).map((ticket) => ({ ...mapSnapshotTicket(ticket), driverId: ticket.driver_id || row.driver_id || null }));
   return {
-    id: row.id, number: String(row.number).padStart(3, '0'), driver: driver.fullName || driver.name || '',
+    id: row.id, driverId: row.driver_id || null, number: String(row.number).padStart(3, '0'), driver: driver.fullName || driver.name || '',
     start: row.period_start, end: row.period_end, count: row.ticket_count, total: Number(row.total) || 0,
     status: row.status, createdAt: row.created_at || null, sentAt: row.sent_at || null,
     ticketIds: ticketDetails.map((ticket) => ticket.id), ticketDetails,
@@ -148,20 +149,14 @@ export async function saveCloudDriver(driver) {
   return mapDriver(data);
 }
 
-export async function deleteCloudDriver(id) {
-  const ticketResult = await supabase.from('tickets').select('scan_path').eq('driver_id', id);
-  if (ticketResult.error) throw ticketResult.error;
-  const closures = await supabase.from('closures').delete().eq('driver_id', id);
-  if (closures.error) throw closures.error;
-  const tickets = await supabase.from('tickets').delete().eq('driver_id', id);
-  if (tickets.error) throw tickets.error;
-  const scanPaths = ticketResult.data.map((ticket) => ticket.scan_path).filter(Boolean);
-  if (scanPaths.length) {
-    const { error: storageError } = await supabase.storage.from(scanBucket).remove(scanPaths);
-    if (storageError) console.warn('Motorista e tickets excluídos, mas alguns escaneamentos não puderam ser removidos.', storageError);
+export async function setCloudDriverActive(id, active) {
+  const { error } = await supabase.rpc('set_driver_active', { driver_uuid: id, active_input: active });
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      throw new Error('A atualização para inativar motoristas ainda precisa ser aplicada no banco de dados.');
+    }
+    throw error;
   }
-  const driver = await supabase.from('drivers').delete().eq('id', id);
-  if (driver.error) throw driver.error;
 }
 
 export async function deleteCloudTicket(id) {
@@ -439,3 +434,4 @@ export function subscribeCloudChanges(onChange) {
 export async function signOut() {
   return supabase.auth.signOut();
 }
+

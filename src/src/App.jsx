@@ -5,10 +5,11 @@ import {
   Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import {
-  clearCloudTicketScanCache, cloudConfigured, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, deleteCloudDriver, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
+  clearCloudTicketScanCache, cloudConfigured, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, setCloudDriverActive, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
   onAuthChange, requestCloudClosure, saveCloudDriver, saveCloudTicket,
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
+import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 
 const initialTickets = [
   { id: 'T-1464', dateISO: '2026-10-17', date: '17/10/2026', number: '1464', driver: 'Motorista 01', plate: 'QZV-2H16', weight: 150, gross: 150, discount: 0, note: '', status: 'Aberto' },
@@ -292,10 +293,10 @@ export default function App() {
   const [ticketDeletePassword, setTicketDeletePassword] = useState('');
   const [ticketDeleteMessage, setTicketDeleteMessage] = useState('');
   const [ticketDeleteBusy, setTicketDeleteBusy] = useState(false);
-  const [driverToDelete, setDriverToDelete] = useState(null);
-  const [driverDeletePassword, setDriverDeletePassword] = useState('');
-  const [driverDeleteMessage, setDriverDeleteMessage] = useState('');
-  const [driverDeleteBusy, setDriverDeleteBusy] = useState(false);
+  const [driverToUpdate, setDriverToUpdate] = useState(null);
+  const [driverActivePassword, setDriverActivePassword] = useState('');
+  const [driverActiveMessage, setDriverActiveMessage] = useState('');
+  const [driverActiveBusy, setDriverActiveBusy] = useState(false);
   const [closureToEdit, setClosureToEdit] = useState(null);
   const scanPrefetchSignature = useRef('');
 
@@ -456,12 +457,18 @@ export default function App() {
       setNotice(`O ticket ${ticketNumber} já está cadastrado para ${duplicate.driver}, em ${duplicate.date}. Confira o número antes de salvar.`);
       return;
     }
+    const driverRecord = drivers.find((item) => driverKey(item) === String(form.get('driver')));
+    if (!driverRecord || driverRecord.active === false) {
+      setNotice('Selecione um motorista ativo antes de lançar o ticket.');
+      return;
+    }
     const ticket = {
       id: `T-${Date.now()}`,
       dateISO: String(form.get('date') || localToday()),
       date: formatDate(String(form.get('date') || localToday())),
       number: ticketNumber,
-      driver: form.get('driver'),
+      driver: driverRecord.name,
+      driverId: driverRecord.id || null,
       plate: String(form.get('plate') || '—').toUpperCase(),
       weight: Number(form.get('weight')) || 0,
       gross: Number(form.get('gross')) || 0,
@@ -470,7 +477,6 @@ export default function App() {
       status: 'Aberto',
     };
     if (cloudConfigured && sessionUser) {
-      const driverRecord = drivers.find((item) => item.name === ticket.driver);
       if (!driverRecord?.id) { setNotice('Cadastre o motorista na nuvem antes de lançar o ticket.'); return; }
       if (savingTicket) return;
       setCloudBusy(true);
@@ -520,8 +526,11 @@ export default function App() {
     const form = new FormData(event.currentTarget);
     const number = String(form.get('number') || '').trim();
     const dateISO = String(form.get('date') || '');
-    const driver = String(form.get('driver') || '');
-    const selectedDriver = drivers.find((item) => item.name === driver);
+    const selectedDriver = drivers.find((item) => driverKey(item) === String(form.get('driver') || ''));
+    const driver = selectedDriver?.name || '';
+    if (selectedDriver?.active === false && !matchesDriver(editingTicket || {}, selectedDriver)) {
+      throw new Error('Selecione um motorista ativo para transferir o ticket.');
+    }
     const plate = String(form.get('plate') || '').trim().toUpperCase();
     const weight = Number(form.get('weight'));
     const gross = Number(form.get('gross'));
@@ -534,9 +543,9 @@ export default function App() {
     const duplicate = tickets.find((ticket) => ticket.id !== editingTicket.id && ticket.number.trim().toLocaleLowerCase('pt-BR') === number.toLocaleLowerCase('pt-BR'));
     if (duplicate) { setNotice(`O ticket ${number} já está cadastrado para ${duplicate.driver}, em ${duplicate.date}.`); return; }
     const note = String(form.get('note') || '').trim();
-    const changes = { number, dateISO, date: formatDate(dateISO), driver, plate, weight, gross, discount, note };
+    const changes = { number, dateISO, date: formatDate(dateISO), driver, driverId: selectedDriver?.id || null, plate, weight, gross, discount, note };
     const linkedClosure = closures.find((closure) => closure.ticketIds?.includes(editingTicket.id));
-    const changesDriverOrDate = editingTicket.driver !== driver || editingTicket.dateISO !== dateISO;
+    const changesDriverOrDate = !matchesDriver(editingTicket, selectedDriver || {}) || editingTicket.dateISO !== dateISO;
     if (scanFile && !(cloudConfigured && sessionUser)) { setNotice('Entre no aplicativo conectado à nuvem para trocar o comprovante.'); return; }
     if (cloudConfigured && sessionUser) {
       setCloudBusy(true);
@@ -597,7 +606,7 @@ export default function App() {
       accountType: String(form.get('accountType') || '').trim(),
       branch: String(form.get('branch') || '').trim(),
       account: String(form.get('account') || '').trim(),
-      defaultFare: Number(form.get('defaultFare')) || 1000,
+      defaultFare: Number(form.get('defaultFare') ?? 1000),
     };
     if (cloudConfigured && sessionUser) {
       setCloudBusy(true);
@@ -606,8 +615,9 @@ export default function App() {
           if (!sessionUser.email) throw new Error('A conta não tem um e-mail de acesso para validar a senha.');
           await verifyAdminPassword(sessionUser.email, adminPassword, sessionUser.id);
         }
-        const saved = await saveCloudDriver(record);
-        setDrivers((current) => [...current.filter((driver) => driver.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+        await saveCloudDriver(record);
+        const data = await loadCloudData();
+        setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
       } catch (error) {
         const message = error.code === '23505' ? 'Já existe um motorista com esse nome.' : (error.message || 'tente novamente');
         setNotice(`Não foi possível salvar o motorista: ${message}`);
@@ -620,61 +630,52 @@ export default function App() {
       window.setTimeout(() => setNotice(''), 5000);
       return true;
     }
-    setDrivers((current) => [...current.filter((driver) => driver.name !== record.originalName), { ...record, id: record.id || record.name }].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+    const saved = { ...drivers.find((driver) => driver.id === record.id), ...record, id: record.id || crypto.randomUUID() };
+    setDrivers((current) => [...current.filter((driver) => driver.id !== saved.id && driver.name !== record.originalName), saved].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+    setTickets((current) => current.map((ticket) => matchesDriver(ticket, { id: record.id, name: record.originalName }) ? { ...ticket, driverId: saved.id, driver: saved.name } : ticket));
     formElement.reset();
     setNotice('Motorista salvo nesta demonstração. Os dados ainda não foram gravados na nuvem.');
     window.setTimeout(() => setNotice(''), 5000);
     return true;
   }
 
-  function removeDriver(driver) {
-    if (cloudConfigured && sessionUser && !isAdmin) {
-      setNotice('Somente o administrador pode excluir motoristas.');
-      window.setTimeout(() => setNotice(''), 6000);
+  function changeDriverActive(driver) {
+    if (!isAdmin) {
+      setNotice('Somente o administrador pode alterar a situação de motoristas.');
       return;
     }
-    setDriverDeletePassword('');
-    setDriverDeleteMessage('');
-    setDriverToDelete(driver);
+    setDriverActivePassword('');
+    setDriverActiveMessage('');
+    setDriverToUpdate(driver);
   }
 
-  async function confirmDeleteDriver(event) {
+  async function confirmDriverActive(event) {
     event.preventDefault();
-    const driver = driverToDelete;
-    if (!driver || driverDeleteBusy) return;
-    setDriverDeleteBusy(true);
-    setDriverDeleteMessage('');
-    if (cloudConfigured && sessionUser) {
-      try {
+    const driver = driverToUpdate;
+    if (!driver || driverActiveBusy) return;
+    const active = driver.active === false;
+    setDriverActiveBusy(true);
+    setDriverActiveMessage('');
+    try {
+      if (cloudConfigured && sessionUser) {
+        if (!isAdmin) throw new Error('Somente o administrador pode alterar a situação de motoristas.');
         if (!sessionUser.email) throw new Error('A conta não tem um e-mail de acesso para validar a senha.');
-        await verifyAdminPassword(sessionUser.email, driverDeletePassword, sessionUser.id);
-        setCloudBusy(true);
-        await deleteCloudDriver(driver.id);
-        setDrivers((current) => current.filter((item) => item.id !== driver.id));
-        setTickets((current) => current.filter((item) => item.driver !== driver.name));
-        setClosures((current) => current.filter((item) => item.driver !== driver.name));
-        setDriverToDelete(null);
-        setDriverDeletePassword('');
-        setNotice(`Motorista ${driver.name} e seus registros foram excluídos.`);
-        window.setTimeout(() => setNotice(''), 7000);
-      } catch (error) {
-        const message = error.message || '';
-        setDriverDeleteMessage(/invalid login credentials|invalid password|credentials/i.test(message)
-          ? 'Senha incorreta. Confira a senha da sua conta administradora e tente novamente.'
-          : `Não foi possível excluir o motorista: ${message || 'tente novamente'}`);
-      } finally {
-        setCloudBusy(false);
-        setDriverDeleteBusy(false);
+        await verifyAdminPassword(sessionUser.email, driverActivePassword, sessionUser.id);
+        await setCloudDriverActive(driver.id, active);
       }
-      return;
+      setDrivers((current) => current.map((item) => driverKey(item) === driverKey(driver) ? { ...item, active } : item));
+      setDriverToUpdate(null);
+      setDriverActivePassword('');
+      setNotice(`Motorista ${driver.name} ${active ? 'reativado' : 'inativado'}. Tickets, comprovantes e fechamentos foram preservados.`);
+      window.setTimeout(() => setNotice(''), 7000);
+    } catch (error) {
+      const message = error.message || '';
+      setDriverActiveMessage(/invalid login credentials|invalid password|credentials/i.test(message)
+        ? 'Senha incorreta. Confira a senha da sua conta administradora e tente novamente.'
+        : `Não foi possível alterar o motorista: ${message || 'tente novamente'}`);
+    } finally {
+      setDriverActiveBusy(false);
     }
-    setDrivers((current) => current.filter((item) => item.id !== driver.id && item.name !== driver.name));
-    setTickets((current) => current.filter((item) => item.driver !== driver.name));
-    setClosures((current) => current.filter((item) => item.driver !== driver.name));
-    setDriverToDelete(null);
-    setDriverDeleteBusy(false);
-    setNotice(`Motorista ${driver.name} e seus registros foram excluídos desta demonstração.`);
-    window.setTimeout(() => setNotice(''), 5000);
   }
 
   async function removeTicket(ticket) {
@@ -764,12 +765,12 @@ export default function App() {
 
   async function generateClosures(selectedTickets, periodStart, periodEnd) {
     if (cloudConfigured && sessionUser) {
-      const selectedDriverName = selectedTickets[0]?.driver;
-      if (!selectedDriverName || selectedTickets.some((ticket) => ticket.driver !== selectedDriverName)) {
+      const selectedDriverKey = recordDriverKey(selectedTickets[0] || {});
+      if (!selectedDriverKey || selectedTickets.some((ticket) => recordDriverKey(ticket) !== selectedDriverKey)) {
         setNotice('Cada fechamento deve conter tickets de um único motorista.');
         return;
       }
-      const profile = drivers.find((item) => item.name === selectedDriverName);
+      const profile = drivers.find((item) => driverKey(item) === selectedDriverKey);
       if (!profile?.id) { setNotice('Cadastre este motorista na nuvem antes de gerar o fechamento.'); return; }
       const from = periodStart || selectedTickets.map((item) => item.dateISO).sort()[0];
       const to = periodEnd || selectedTickets.map((item) => item.dateISO).sort().at(-1);
@@ -779,7 +780,7 @@ export default function App() {
         const data = await loadCloudData();
         setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
         setClosureSequence(Math.max(0, ...data.closures.map((item) => Number(item.number) || 0)) + 1);
-        setNotice(`Fechamento de ${selectedDriverName} salvo na nuvem.`);
+        setNotice(`Fechamento de ${profile.name} salvo na nuvem.`);
       } catch (error) {
         setNotice(`Não foi possível gerar o fechamento: ${error.message || 'tente novamente'}`);
       } finally { setCloudBusy(false); }
@@ -788,19 +789,21 @@ export default function App() {
     }
     const byDriver = new Map();
     selectedTickets.forEach((ticket) => {
-      byDriver.set(ticket.driver, [...(byDriver.get(ticket.driver) || []), ticket]);
+      const key = recordDriverKey(ticket);
+      byDriver.set(key, [...(byDriver.get(key) || []), ticket]);
     });
-    const created = [...byDriver.entries()].map(([driver, items], index) => ({
-      id: `F-${Date.now()}-${driver}`,
+    const created = [...byDriver.entries()].map(([key, items], index) => ({
+      id: `F-${Date.now()}-${key}`,
       number: String(closureSequence + index).padStart(3, '0'),
-      driver,
+      driver: items[0].driver,
+      driverId: items[0].driverId || null,
       start: periodStart || items.map((item) => item.dateISO).sort()[0],
       end: periodEnd || items.map((item) => item.dateISO).sort().at(-1),
       count: items.length,
       total: items.reduce((sum, item) => sum + item.gross - item.discount, 0),
       ticketIds: items.map((item) => item.id),
       ticketDetails: items.map((item) => ({ ...item })),
-      driverDetails: driverPaymentDetails(driver, items, drivers.find((item) => item.name === driver)),
+      driverDetails: driverPaymentDetails(items[0].driver, items, drivers.find((item) => driverKey(item) === key)),
       status: 'Aguardando envio',
     }));
     const ticketIds = new Set(selectedTickets.map((ticket) => ticket.id));
@@ -813,12 +816,12 @@ export default function App() {
 
   function deleteClosure(closure) {
     if (!isWithinClosureDeleteWindow(closure)) {
-      setNotice('O prazo para excluir este fechamento enviado já terminou (5 dias).');
+      setNotice('O prazo para remover este fechamento enviado já terminou (5 dias).');
       window.setTimeout(() => setNotice(''), 6000);
       return;
     }
     if (cloudConfigured && sessionUser && !isAdmin) {
-      setNotice('Somente o administrador pode excluir fechamentos.');
+      setNotice('Somente o administrador pode remover fechamentos.');
       window.setTimeout(() => setNotice(''), 6000);
       return;
     }
@@ -832,7 +835,7 @@ export default function App() {
     const closure = closureToDelete;
     if (!closure || deleteBusy) return;
     if (!isWithinClosureDeleteWindow(closure)) {
-      setDeletePasswordMessage('O prazo para excluir este fechamento enviado já terminou (5 dias).');
+      setDeletePasswordMessage('O prazo para remover este fechamento enviado já terminou (5 dias).');
       return;
     }
     setDeleteBusy(true);
@@ -845,7 +848,7 @@ export default function App() {
         await deleteCloudClosure(closure.id);
         const data = await loadCloudData();
         setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
-        setNotice(closure.status === 'Solicitado' ? 'Fechamento reaberto. Os tickets voltaram para abertos e o fechamento saiu da lista de solicitações.' : 'Fechamento excluído da nuvem. Os tickets voltaram para abertos.');
+        setNotice(closure.status === 'Solicitado' ? 'Fechamento removido. Os tickets voltaram para aberto e podem ser incluídos em outro fechamento.' : 'Fechamento removido. Os tickets voltaram para aberto.');
         setClosureToDelete(null);
         setDeletePassword('');
         window.setTimeout(() => setNotice(''), 6000);
@@ -853,7 +856,7 @@ export default function App() {
         const message = error.message || '';
         setDeletePasswordMessage(/invalid login credentials|invalid password|credentials/i.test(message)
           ? 'Senha incorreta. Confira a senha da sua conta administradora e tente novamente.'
-          : `Não foi possível excluir o fechamento: ${message || 'tente novamente'}`);
+          : `Não foi possível remover o fechamento: ${message || 'tente novamente'}`);
       } finally {
         setCloudBusy(false);
         setDeleteBusy(false);
@@ -865,7 +868,7 @@ export default function App() {
     setTickets((current) => current.map((ticket) => ids.has(ticket.id) && ticket.status === 'No fechamento' ? { ...ticket, status: 'Aberto', requestStatus: 'Aberto' } : ticket));
     setClosureToDelete(null);
     setDeleteBusy(false);
-    setNotice('Fechamento excluído nesta demonstração. Os tickets voltaram para abertos; a alteração ainda não está na nuvem.');
+    setNotice('Fechamento removido nesta demonstração. Os tickets voltaram para aberto; a alteração ainda não está na nuvem.');
     window.setTimeout(() => setNotice(''), 6000);
   }
 
@@ -998,14 +1001,14 @@ export default function App() {
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
               {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
               {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
-              {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onDelete={removeDriver} />}
+              {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
             {accountOpen && <AccountModal user={sessionUser} onClose={() => setAccountOpen(false)} onSave={saveAccount} busy={accountBusy} message={accountMessage} isAdmin={isAdmin} />}
             {closureToDelete && <AdminDeleteModal closure={closureToDelete} password={deletePassword} setPassword={setDeletePassword} message={deletePasswordMessage} busy={deleteBusy} onClose={() => { if (!deleteBusy) { setClosureToDelete(null); setDeletePassword(''); setDeletePasswordMessage(''); } }} onConfirm={confirmDeleteClosure} />}
-            {driverToDelete && <DriverDeleteModal driver={driverToDelete} ticketCount={tickets.filter((ticket) => ticket.driver === driverToDelete.name).length} closureCount={closures.filter((closure) => closure.driver === driverToDelete.name).length} password={driverDeletePassword} setPassword={setDriverDeletePassword} message={driverDeleteMessage} busy={driverDeleteBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverDeleteBusy) { setDriverToDelete(null); setDriverDeletePassword(''); setDriverDeleteMessage(''); } }} onConfirm={confirmDeleteDriver} />}
+            {driverToUpdate && <DriverActiveModal driver={driverToUpdate} ticketCount={tickets.filter((ticket) => matchesDriver(ticket, driverToUpdate)).length} closureCount={closures.filter((closure) => matchesDriver(closure, driverToUpdate)).length} password={driverActivePassword} setPassword={setDriverActivePassword} message={driverActiveMessage} busy={driverActiveBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverActiveBusy) { setDriverToUpdate(null); setDriverActivePassword(''); setDriverActiveMessage(''); } }} onConfirm={confirmDriverActive} />}
             {ticketToDelete && <TicketDeleteModal ticket={ticketToDelete} password={ticketDeletePassword} setPassword={setTicketDeletePassword} message={ticketDeleteMessage} busy={ticketDeleteBusy} onClose={() => { if (!ticketDeleteBusy) { setTicketToDelete(null); setTicketDeletePassword(''); setTicketDeleteMessage(''); } }} onConfirm={confirmDeleteTicket} />}
             {closureToEdit && <ClosureEditorModal key={closureToEdit.id} closure={closureToEdit} tickets={tickets} onClose={() => setClosureToEdit(null)} onSave={saveClosureEdit} />}
           </main>
@@ -1036,10 +1039,10 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
   const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
   const [endDate, setEndDate] = useState(localToday);
   const [chartGranularity, setChartGranularity] = useState('day');
-  const drivers = useMemo(() => [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')), [driverRecords, tickets]);
+  const drivers = useMemo(() => driverOptions(driverRecords, tickets), [driverRecords, tickets]);
   const invalidDateRange = Boolean(startDate && endDate && startDate > endDate);
   const filteredTickets = useMemo(() => invalidDateRange ? [] : tickets.filter((ticket) =>
-    (driverFilter === 'Todos' || ticket.driver === driverFilter) && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate),
+    (driverFilter === 'Todos' || recordDriverKey(ticket) === driverFilter) && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate),
   ), [tickets, driverFilter, startDate, endDate, invalidDateRange]);
   const summary = useMemo(() => filteredTickets.reduce((result, ticket) => {
     result.count += 1;
@@ -1102,7 +1105,7 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
     <section className="panel dashboard-filter-panel">
       <div className="panel-heading"><div><h2>Filtros</h2><p>Os indicadores e tickets em aberto seguem os filtros selecionados.</p></div></div>
       <div className="filter-fields dashboard-filters">
-        <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label>
+        <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label>
         <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
         <label>Data final<input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></label>
       </div>
@@ -1129,7 +1132,7 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
 
     <section className="panel recent-panel dashboard-recent-panel">
       <div className="panel-heading dashboard-recent-heading"><div><h2>Tickets em aberto</h2><p>{openTickets.length.toLocaleString('pt-BR')} aguardando fechamento no período filtrado</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
-      <div className="open-ticket-toolbar"><label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><span>Segue o período selecionado nos filtros do painel.</span></div>
+      <div className="open-ticket-toolbar"><label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label><span>Segue o período selecionado nos filtros do painel.</span></div>
       <OpenTicketTotals tickets={openTickets} />
       {openTickets.length ? <TicketTable tickets={openTickets} onView={onView} onEdit={onEdit} /> : <div className="empty-state">Nenhum ticket em aberto para este período.</div>}
     </section>
@@ -1143,7 +1146,7 @@ function OpenTicketTotals({ tickets, selected = false, filtered = false }) {
   }), { amount: 0, weight: 0 });
   return <div className="open-ticket-totals" aria-live="polite" aria-label={selected ? 'Totais selecionados para fechamento' : 'Totais dos tickets em aberto'}>
     <Metric icon={ClipboardList} label={selected ? 'Tickets selecionados' : filtered ? 'Tickets filtrados' : 'Tickets em aberto'} value={tickets.length.toLocaleString('pt-BR')} tint="amber" foot={selected ? 'Incluídos neste fechamento' : 'Conforme motorista e período'} />
-    <Metric icon={BadgeDollarSign} label={selected ? 'Total a pagar selecionado' : filtered ? 'Valor líquido dos tickets' : 'Total a pagar em aberto'} value={money(totals.amount)} tint="green" foot="Valor líquido após descontos" />
+    <Metric icon={BadgeDollarSign} label={selected ? 'Valor líquido selecionado' : filtered ? 'Valor líquido dos tickets' : 'Valor líquido em aberto'} value={money(totals.amount)} tint="green" foot="Valor líquido após descontos" />
     <Metric icon={Truck} label={selected ? 'Peso total selecionado' : filtered ? 'Peso total dos tickets' : 'Peso total em aberto'} value={`${totals.weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`} tint="violet" foot="Soma do peso dos tickets" />
   </div>;
 }
@@ -1162,8 +1165,9 @@ function Metric({ icon: Icon, label, value, tint, foot }) {
 function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, canDeleteTicket, saving }) {
   const [scanName, setScanName] = useState('');
   const [ticketDriver, setTicketDriver] = useState('');
-  const driverOptions = [...new Set([...drivers.map((item) => item.name), ...tickets.map((item) => item.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const listedTickets = tickets.filter((ticket) => !ticketDriver || ticket.driver === ticketDriver);
+  const options = driverOptions(drivers, tickets);
+  const activeDrivers = drivers.filter((driver) => driver.active !== false);
+  const listedTickets = tickets.filter((ticket) => !ticketDriver || recordDriverKey(ticket) === ticketDriver);
   const handleTicketSubmit = async (event) => {
     const form = event.currentTarget;
     await onSave(event);
@@ -1176,7 +1180,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
       <form className="ticket-form" onSubmit={handleTicketSubmit}>
         <label>Data *<input type="date" name="date" defaultValue={localToday()} required /></label>
         <label>Nº do ticket *<input name="number" placeholder="Ex.: 1465" required /></label>
-        <label>Motorista *<select name="driver" defaultValue="" required onChange={(event) => { const selected = drivers.find((driver) => driver.name === event.target.value); event.currentTarget.form.elements.plate.value = selected?.plate || ''; event.currentTarget.form.elements.gross.value = Number(selected?.defaultFare ?? 1000).toFixed(2); }}><option value="" disabled>Selecione…</option>{drivers.map((driver) => <option key={driver.name}>{driver.name}</option>)}</select></label>
+        <label>Motorista *<select name="driver" defaultValue="" required onChange={(event) => { const selected = activeDrivers.find((driver) => driverKey(driver) === event.target.value); event.currentTarget.form.elements.plate.value = selected?.plate || ''; event.currentTarget.form.elements.gross.value = Number(selected?.defaultFare ?? 1000).toFixed(2); }}><option value="" disabled>Selecione…</option>{activeDrivers.map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}</option>)}</select></label>
         <label>Placa<input name="plate" placeholder="Ex.: ABC-1D23" /></label>
         <label>Peso (kg) *<input name="weight" type="number" min="0" step="0.01" placeholder="0,00" required /></label>
         <label>Valor bruto (R$) *<input name="gross" type="number" min="0" step="0.01" defaultValue="1000" placeholder="0,00" required /></label>
@@ -1196,7 +1200,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
     </section>
     <section className="panel list-panel">
       <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={() => window.alert('A exportação será conectada em uma etapa futura.')}><ArrowDownToLine size={16} /> Exportar</button></div>
-      <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select ticket-driver-filter" aria-label="Filtrar por motorista" value={ticketDriver} onChange={(event) => setTicketDriver(event.target.value)}><option value="">Todos os motoristas</option>{driverOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select><select className="filter-select" aria-label="Filtrar por status" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
+      <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select ticket-driver-filter" aria-label="Filtrar por motorista" value={ticketDriver} onChange={(event) => setTicketDriver(event.target.value)}><option value="">Todos os motoristas</option>{options.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select><select className="filter-select" aria-label="Filtrar por status" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
       <OpenTicketTotals tickets={listedTickets} filtered={filter !== 'Aberto'} />
       <TicketTable tickets={listedTickets} onView={onView} onEdit={onEdit} onDelete={onDelete} canDeleteTicket={canDeleteTicket} />
     </section>
@@ -1332,7 +1336,7 @@ function TicketEditModal({ ticket, drivers, requirePassword, onClose, onSave }) 
       <form className="edit-ticket-form" onSubmit={submit}>
         <label>Data *<input name="date" type="date" defaultValue={ticket.dateISO || localToday()} required /></label>
         <label>Nº do ticket *<input name="number" defaultValue={ticket.number} required autoFocus /></label>
-        <label>Motorista *<select name="driver" defaultValue={ticket.driver} required>{!drivers.some((driver) => driver.name === ticket.driver) && <option value={ticket.driver}>{ticket.driver}</option>}{drivers.map((driver) => <option key={driver.id || driver.name} value={driver.name}>{driver.name}</option>)}</select></label>
+        <label>Motorista *<select name="driver" defaultValue={recordDriverKey(ticket)} required>{drivers.filter((driver) => driver.active !== false || matchesDriver(ticket, driver)).map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}{driver.active === false ? " (inativo)" : ""}</option>)}</select></label>
         <label>Placa<input name="plate" defaultValue={ticket.plate || ''} placeholder="Ex.: ABC-1D23" /></label>
         <label>Peso (kg) *<input name="weight" type="number" min="0" step="0.01" defaultValue={ticket.weight} required /></label>
         <label>Valor bruto (R$) *<input name="gross" type="number" min="0" step="0.01" defaultValue={ticket.gross} required /></label>
@@ -1518,10 +1522,10 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
   const [start, setStart] = useState(() => localDaysAgo(5));
   const [end, setEnd] = useState(localToday);
   const [selectedTicketIds, setSelectedTicketIds] = useState(() => new Set());
-  const drivers = [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].sort();
+  const drivers = driverOptions(driverRecords, tickets);
   const validRange = Boolean(start && end && start <= end);
   const matches = validRange && driver ? tickets.filter((ticket) =>
-    ticket.status === 'Aberto' && ticket.dateISO >= start && ticket.dateISO <= end && ticket.driver === driver,
+    ticket.status === 'Aberto' && ticket.dateISO >= start && ticket.dateISO <= end && recordDriverKey(ticket) === driver,
   ).sort((a, b) => a.dateISO.localeCompare(b.dateISO) || a.number.localeCompare(b.number)) : [];
   const matchKey = matches.map((ticket) => ticket.id).join('|');
   useEffect(() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id))), [matchKey]);
@@ -1537,17 +1541,17 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
 
   return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Gere um fechamento por motorista e período." action={<button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Plus size={17} /> {generating ? 'Gerando…' : `Gerar fechamento${selectedMatches.length ? ` (${selectedMatches.length})` : ''}`}</button>} />
     <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista e o período. Cada fechamento é individual.</p></div></div>
-      <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label><label>Data inicial<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>Data final<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
+      <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label><label>Data inicial<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>Data final<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>Selecione um motorista para ver os tickets disponíveis para fechar.</span></div> : !validRange ? <div className="empty-callout warning-callout"><CircleHelp size={18} /><span>A data inicial precisa ser anterior ou igual à data final.</span></div> : matches.length ? <>
         <OpenTicketTotals tickets={selectedMatches} selected />
         <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Todos os abertos do filtro: <strong>{money(matches.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))}</strong> · {matches.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0).toLocaleString('pt-BR')} kg</span></div>
         <div className="selection-toolbar"><button className="text-button" onClick={() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id)))}>Selecionar todos</button><button className="text-button" onClick={() => setSelectedTicketIds(new Set())}>Limpar seleção</button></div>
         <div className="table-wrap closure-results"><table><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td></tr>)}</tbody></table></div>
-        <div className="closure-action"><span>O fechamento será somente de {driver} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
+        <div className="closure-action"><span>O fechamento será somente de {drivers.find((option) => option.key === driver)?.name} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
       </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket aberto encontrado nesse período. Os resultados mudam automaticamente ao alterar os filtros.</span></div>}
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
-      {pendingClosures.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Reabrir tickets</button>}</td></tr>)}</tbody></table></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
+      {pendingClosures.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></table></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
     </section>
   </>;
 }
@@ -1555,27 +1559,27 @@ function Closures({ tickets, drivers: driverRecords, closures, canDelete, onGene
 function AdminDeleteModal({ closure, password, setPassword, message, busy, onClose, onConfirm }) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
     <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title">
-      <div className="panel-heading"><div><p className="eyebrow">CONFIRMAÇÃO DO ADMINISTRADOR</p><h2 id="admin-delete-title">Reabrir tickets do fechamento {closure.number}?</h2><p>{closure.driver} · {formatDate(closure.start)} a {formatDate(closure.end)}</p></div><button className="icon-button" aria-label="Fechar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
-      <p className="admin-delete-copy">Os tickets voltarão para o estado aberto e poderão ser incluídos em outro fechamento. O fechamento sairá da lista correspondente. Essa ação não pode ser desfeita.</p>
+      <div className="panel-heading"><div><p className="eyebrow">CONFIRMAÇÃO DO ADMINISTRADOR</p><h2 id="admin-delete-title">Remover fechamento {closure.number}?</h2><p>{closure.driver} · {formatDate(closure.start)} a {formatDate(closure.end)}</p></div><button className="icon-button" aria-label="Fechar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
+      <p className="admin-delete-copy">Este fechamento sairá da lista. Seus tickets e comprovantes serão preservados, e os tickets voltarão para “Aberto” para serem incluídos em outro fechamento. Se o PDF já foi enviado por e-mail, esta ação não cancela esse envio.</p>
       <form className="admin-delete-form" onSubmit={onConfirm}>
         <label>Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus /></label>
         <small>A senha é validada pelo Supabase e não fica salva no aplicativo.</small>
         {message && <p className="admin-delete-error" role="alert">{message}</p>}
-        <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={busy || !password}>{busy ? 'Reabrindo tickets…' : 'Confirmar reabertura'}</button></div>
+        <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={busy || !password}>{busy ? 'Removendo fechamento…' : 'Remover do fechamento'}</button></div>
       </form>
     </section>
   </div>;
 }
 
-function DriverDeleteModal({ driver, ticketCount, closureCount, password, setPassword, message, busy, requirePassword, onClose, onConfirm }) {
+function DriverActiveModal({ driver, ticketCount, closureCount, password, setPassword, message, busy, requirePassword, onClose, onConfirm }) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-    <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="driver-delete-title">
-      <div className="panel-heading"><div><p className="eyebrow">CONFIRMAÇÃO DO ADMINISTRADOR</p><h2 id="driver-delete-title">Excluir motorista {driver.name}?</h2><p>{driver.plate || 'Placa não informada'}</p></div><button className="icon-button" aria-label="Fechar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
-      <p className="admin-delete-copy">Esta ação também apagará {ticketCount} ticket(s) e {closureCount} fechamento(s) deste motorista. Essa ação não pode ser desfeita.</p>
+    <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="driver-active-title">
+      <div className="panel-heading"><div><p className="eyebrow">CONFIRMAÇÃO DO ADMINISTRADOR</p><h2 id="driver-active-title">{driver.active === false ? "Reativar" : "Inativar"} motorista {driver.name}?</h2><p>{driver.plate || 'Placa não informada'}</p></div><button className="icon-button" aria-label="Fechar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
+      <p className="admin-delete-copy">{driver.active === false ? "O motorista voltará a aparecer para novos lançamentos." : "O motorista deixará de aparecer para novos lançamentos e poderá ser reativado quando necessário."} Os {ticketCount} ticket(s), os comprovantes e os {closureCount} fechamento(s) serão preservados. Tickets antigos continuam disponíveis para fechamento.</p>
       <form className="admin-delete-form" onSubmit={onConfirm}>
         {requirePassword && <><label>Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus /></label><small>A senha é validada pelo Supabase e não fica salva no aplicativo.</small></>}
         {message && <p className="admin-delete-error" role="alert">{message}</p>}
-        <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="button delete-button" type="submit" disabled={busy || (requirePassword && !password)}>{busy ? 'Validando e excluindo…' : 'Confirmar exclusão'}</button></div>
+        <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={busy || (requirePassword && !password)}>{busy ? 'Salvando…' : driver.active === false ? 'Confirmar reativação' : 'Confirmar inativação'}</button></div>
       </form>
     </section>
   </div>;
@@ -1617,7 +1621,7 @@ function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload,
   return <><PageHeading eyebrow="CONSULTA" title="Histórico" subtitle="Consulte os fechamentos anteriores e acompanhe o status do envio." />
     <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Os pendentes de envio aparecem primeiro; marque quando o e-mail for enviado.</p></div></div>
-      {ordered.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(item)}>{item.status === 'Solicitado' ? <RefreshCw size={14} /> : <Trash2 size={14} />} {item.status === 'Solicitado' ? 'Reabrir tickets' : 'Excluir'}</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
+      {ordered.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de remoção encerrado após 5 dias.' : 'Os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></table></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
     </section>
   </>;
 }
@@ -1632,7 +1636,7 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
   const [error, setError] = useState('');
   const currentIds = new Set(lines.map((ticket) => ticket.id));
   const candidates = tickets.filter((ticket) =>
-    ticket.status === 'Aberto' && ticket.driver === closure.driver && ticket.dateISO >= closure.start && ticket.dateISO <= closure.end && !currentIds.has(ticket.id),
+    ticket.status === 'Aberto' && (closure.driverId ? ticket.driverId === closure.driverId : ticket.driver === closure.driver) && ticket.dateISO >= closure.start && ticket.dateISO <= closure.end && !currentIds.has(ticket.id),
   ).sort((a, b) => a.dateISO.localeCompare(b.dateISO) || a.number.localeCompare(b.number));
   const total = lines.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0);
   const requested = closure.status === 'Solicitado';
@@ -1672,16 +1676,18 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
   </div>;
 }
 
-function Drivers({ drivers, onSave, onDelete }) {
+function Drivers({ drivers, onSave, onChangeActive }) {
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState('');
-  const visible = drivers.filter((driver) => driver.name.toLowerCase().includes(query.toLowerCase()));
+  const [status, setStatus] = useState('ativos');
+  const visible = drivers.filter((driver) => driver.name.toLowerCase().includes(query.toLowerCase()) && (status === 'todos' || (status === 'ativos' ? driver.active !== false : driver.active === false)));
   return <><PageHeading eyebrow="CADASTROS" title="Motoristas" subtitle="Cadastros e dados que acompanham cada solicitação." action={<button className="button primary" onClick={() => setEditing({})}><Plus size={17} /> Novo motorista</button>} />
     {editing && <section className="panel driver-form-panel"><div className="panel-heading"><div><h2>{editing.name ? 'Editar motorista' : 'Novo motorista'}</h2><p>Os dados bancários aparecerão no relatório do fechamento.</p></div><button className="icon-button" aria-label="Fechar formulário" onClick={() => setEditing(null)}><X size={18} /></button></div><form key={editing.id || editing.name || 'new'} onSubmit={async (event) => { let password = ''; if (editing.id && cloudConfigured) { password = window.prompt('Digite a senha da conta administradora para editar este motorista.') || ''; if (!password) return; } const saved = await onSave(event, password); if (saved) setEditing(null); }}>
       <input type="hidden" name="driverId" value={editing.id || ''} /><input type="hidden" name="originalName" value={editing.name || ''} />
       <div className="filter-fields driver-fields"><label>Nome completo *<input name="name" defaultValue={editing.name || ''} placeholder="Nome do motorista" required /></label><label>Placa<input name="plate" defaultValue={editing.plate || ''} placeholder="ABC-1D23" /></label><label>Frete padrão (R$) *<input name="defaultFare" type="number" min="0" step="0.01" defaultValue={editing.defaultFare ?? 1000} required /></label><label>CPF<input name="cpf" defaultValue={editing.cpf || ''} placeholder="000.000.000-00" /></label><label>Chave PIX<input name="pix" defaultValue={editing.pix || ''} placeholder="Chave PIX" /></label><label>Banco<input name="bank" defaultValue={editing.bank || ''} placeholder="Nome do banco" /></label><label>Tipo de conta<input name="accountType" defaultValue={editing.accountType || ''} placeholder="Corrente ou poupança" /></label><label>Agência<input name="branch" defaultValue={editing.branch || ''} placeholder="Número da agência" /></label><label>Conta<input name="account" defaultValue={editing.account || ''} placeholder="Número da conta" /></label></div>
       <div className="form-actions"><span><span className="status-dot amber" /> {cloudConfigured ? 'Os dados serão salvos na nuvem.' : 'Demonstração local: os dados não vão para a nuvem.'}</span><button className="button primary" type="submit"><Check size={16} /> {editing.name ? 'Salvar alterações' : 'Salvar motorista'}</button></div>
     </form></section>}
-    <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Use Editar para corrigir. Excluir um motorista também apaga tickets e fechamentos dele.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name}</strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button delete-button small-button" onClick={() => onDelete(driver)}><Trash2 size={13} /> Excluir</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
+    <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Inative motoristas para impedir novos lançamentos. Os tickets, comprovantes e fechamentos são preservados.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><label className="driver-status-filter">Situação<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ativos">Ativos</option><option value="inativos">Inativos</option><option value="todos">Todos</option></select></label><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name} <span className={`status-badge ${driver.active === false ? "pendente" : "aberto"}`}>{driver.active === false ? "Inativo" : "Ativo"}</span></strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button secondary small-button" onClick={() => onChangeActive(driver)}><RefreshCw size={13} /> {driver.active === false ? "Reativar" : "Inativar"}</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
   </>;
 }
+
