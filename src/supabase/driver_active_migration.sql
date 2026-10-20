@@ -52,8 +52,7 @@ begin
 end;
 $$;
 
-drop trigger if exists tickets_require_active_driver on public.tickets;
-create trigger tickets_require_active_driver
+create or replace trigger tickets_require_active_driver
 before insert or update of driver_id on public.tickets
 for each row execute function public.require_active_ticket_driver();
 
