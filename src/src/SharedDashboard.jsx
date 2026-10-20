@@ -81,10 +81,18 @@ export default function SharedDashboard({ token }) {
     const closures = (data?.closures_by_day || []).filter((row) => inPeriod(row) && (!driverFilter || row.driver === driverFilter));
     const byDriver = new Map();
     tickets.forEach((row) => {
-      const current = byDriver.get(row.driver) || { driver: row.driver, count: 0, weight: 0, amount: 0 };
+      const current = byDriver.get(row.driver) || { driver: row.driver, count: 0, weight: 0, amount: 0, openCount: 0, openAmount: 0, awaitingAmount: 0, requestedAmount: 0 };
       current.count += Number(row.count || 0);
       current.weight += Number(row.weight || 0);
       current.amount += Number(row.amount || 0);
+      current.openCount += Number(row.open_count || 0);
+      current.openAmount += Number(row.open_amount || 0);
+      byDriver.set(row.driver, current);
+    });
+    closures.forEach((row) => {
+      const current = byDriver.get(row.driver) || { driver: row.driver, count: 0, weight: 0, amount: 0, openCount: 0, openAmount: 0, awaitingAmount: 0, requestedAmount: 0 };
+      if (row.status === 'Aguardando envio') current.awaitingAmount += Number(row.total || 0);
+      if (row.status === 'Solicitado') current.requestedAmount += Number(row.total || 0);
       byDriver.set(row.driver, current);
     });
     const ranked = [...byDriver.values()];
@@ -132,12 +140,17 @@ export default function SharedDashboard({ token }) {
           <Metric icon={ClipboardList} label="Fechamentos aguardando envio" value={summary.awaitingCount.toLocaleString('pt-BR')} foot={`${money(summary.awaitingAmount)} em fechamentos`} tint="violet" />
           <Metric icon={Check} label="Fechamentos solicitados" value={summary.requestedCount.toLocaleString('pt-BR')} foot={`${money(summary.requestedAmount)} em fechamentos`} tint="blue" />
         </section>
+        <section className="shared-ranking shared-payment-panel">
+          <h2>Valores por motorista para pagamento</h2>
+          <p className="shared-payment-description">Confira o valor líquido e o peso de cada motorista no período selecionado. Os valores em aberto ainda aguardam fechamento.</p>
+          {summary.ranked.length ? <div className="table-wrap"><table><thead><tr><th>MOTORISTA</th><th>TICKETS</th><th>PESO TOTAL</th><th>VALOR TOTAL DOS TICKETS</th><th>EM ABERTO</th><th>AGUARDANDO ENVIO</th><th>SOLICITADO POR E-MAIL</th></tr></thead><tbody>{summary.ranked.map((row) => <tr key={row.driver}><td><strong>{row.driver}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td><strong>{money(row.amount)}</strong></td><td><strong>{money(row.openAmount)}</strong><small className="shared-open-count">{row.openCount.toLocaleString('pt-BR')} ticket(s)</small></td><td>{money(row.awaitingAmount)}</td><td>{money(row.requestedAmount)}</td></tr>)}</tbody><tfoot><tr><th>TOTAL DO FILTRO</th><td>{summary.ticketCount.toLocaleString('pt-BR')}</td><td>{formatWeight(summary.weight)}</td><td><strong>{money(summary.amount)}</strong></td><td><strong>{money(summary.openAmount)}</strong></td><td>{money(summary.awaitingAmount)}</td><td>{money(summary.requestedAmount)}</td></tr></tfoot></table></div> : <p className="shared-empty">Nenhum registro para os filtros selecionados.</p>}
+        </section>
         <div className="shared-rankings">
           <DriverRanking title="Entregas por motorista" metric="count" rows={summary.ranked} formatter={(value) => `${Number(value || 0).toLocaleString('pt-BR')} entregas`} tint="blue" />
           <DriverRanking title="Peso total por motorista" metric="weight" rows={summary.ranked} formatter={formatWeight} tint="violet" />
           <DriverRanking title="Valor por motorista" metric="amount" rows={summary.ranked} formatter={money} tint="green" />
         </div>
-        <div className="shared-note"><AlertCircle size={17} /><span>Os valores representam os tickets registrados no sistema. “Solicitados por e-mail” indica o envio da solicitação de fechamento.</span></div>
+        <div className="shared-note"><AlertCircle size={17} /><span>O valor total soma os tickets do período, já com os descontos. As colunas de fechamento seguem a data do fechamento. “Solicitado por e-mail” registra a solicitação; não confirma pagamento realizado.</span></div>
       </>}
     <footer className="shared-footer">Dados atualizados ao abrir ou atualizar este painel · Acesso somente para consulta</footer>
   </main>;
