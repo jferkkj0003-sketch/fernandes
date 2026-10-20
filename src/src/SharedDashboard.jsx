@@ -52,7 +52,7 @@ export default function SharedDashboard({ token }) {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState('month');
+  const [range, setRange] = useState('week');
   const [month, setMonth] = useState(() => monthISO(new Date()));
   const [customStart, setCustomStart] = useState(() => dateISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [customEnd, setCustomEnd] = useState(() => dateISO(new Date()));
@@ -152,6 +152,11 @@ export default function SharedDashboard({ token }) {
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
+        <section className="shared-payment-budget" aria-label="Valor dos fechamentos para pagamento" aria-live="polite">
+          <div className="shared-budget-main"><span className="shared-budget-eyebrow">{range === 'week' ? 'FECHAMENTOS DOS ÚLTIMOS 7 DIAS' : 'FECHAMENTOS DO PERÍODO SELECIONADO'}</span><h2>Total dos fechamentos para pagamento</h2><strong className="shared-budget-value">{money(summary.awaitingAmount + summary.requestedAmount)}</strong><p>{driverFilter || 'Todos os motoristas'} · {summary.awaitingCount + summary.requestedCount} fechamento(s)</p></div>
+          <div className="shared-budget-breakdown"><div><span>Aguardando envio</span><strong>{money(summary.awaitingAmount)}</strong></div><div><span>Solicitados por e-mail</span><strong>{money(summary.requestedAmount)}</strong></div><div className="shared-budget-open"><span>Ainda em aberto, fora do total acima</span><strong>{money(summary.openAmount)}</strong></div></div>
+          <p className="shared-budget-note">O total considera os fechamentos gerados no período filtrado. O sistema registra a solicitação por e-mail; não confirma se o pagamento já foi realizado. Use o período personalizado para conferir sua semana de fechamento.</p>
+        </section>
         <section className="shared-metrics">
           <Metric icon={Truck} label="Entregas" value={summary.ticketCount.toLocaleString('pt-BR')} foot="Tickets registrados no período" tint="blue" />
           <Metric icon={Weight} label="Peso total" value={formatWeight(summary.weight)} foot="Peso das entregas no período" tint="violet" />
