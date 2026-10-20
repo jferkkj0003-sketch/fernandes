@@ -1,5 +1,15 @@
 # Conectar o DDE Fretes à nuvem
 
+## Atualização: inativação de motoristas
+
+Antes de publicar esta versão, execute `supabase/driver_active_migration.sql` no SQL Editor do projeto existente, depois das migrações anteriores. Todos os motoristas existentes permanecem ativos. A migração preserva tickets, fechamentos e comprovantes, permite apenas ao administrador inativar/reativar pela função `set_driver_active` e impede novos tickets ou transferências para motoristas inativos, inclusive por versões antigas do aplicativo.
+
+Na aba Motoristas, use o filtro Ativos/Inativos/Todos e as ações Inativar/Reativar. A confirmação exige a senha da conta administradora. Motoristas inativos continuam disponíveis nos filtros de consulta e nos fechamentos dos tickets existentes. A edição de um ticket antigo pode manter seu motorista inativo, mas a transferência exige um motorista ativo.
+
+Em Fechamentos e Histórico, “Remover do fechamento” mantém a operação existente `delete_driver_closure`: o fechamento sai da lista e seus tickets voltam para Aberto, sem apagar tickets ou comprovantes. A senha administrativa e o prazo atual de cinco dias para fechamentos solicitados continuam valendo. A ação não cancela um e-mail já enviado e não registra pagamento.
+
+O esquema original e as funções anteriores do Supabase não estão neste repositório. Valide esta migração em uma cópia do projeto antes de aplicar em produção. Não recrie as tabelas existentes. Para reverter somente a interface, publique a versão anterior; a coluna adicional e o bloqueio de novos tickets para inativos podem permanecer no banco. Reative os motoristas se precisar retomar lançamentos pela versão antiga.
+
 O aplicativo usa Supabase para login, banco de dados e atualização em tempo real. Os dados bancários dos motoristas ficam protegidos por login e políticas de acesso no banco.
 
 ## 1. Criar o projeto
@@ -42,3 +52,4 @@ Não coloque no aplicativo uma chave `secret` ou `service_role`; elas dão acess
 ## Enquanto não configurar
 
 Sem essas credenciais, o aplicativo continua em modo demonstração local. Os exemplos não são salvos nem compartilhados entre dispositivos. Os dados reais só devem ser lançados depois da conexão e do login na nuvem.
+
