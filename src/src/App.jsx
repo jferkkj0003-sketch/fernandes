@@ -996,7 +996,7 @@ export default function App() {
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
-              {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onMarkRequested={markClosureRequested} />}
+              {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} />}
               {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onDelete={removeDriver} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>Os registros exibidos são fictícios</span></footer>
@@ -1494,7 +1494,7 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
   </div>;
 }
 
-function Closures({ tickets, drivers: driverRecords, onGenerate }) {
+function Closures({ tickets, drivers: driverRecords, closures, onGenerate, onPreview, onDownload, onMarkRequested }) {
   const [generating, setGenerating] = useState(false);
   const [driver, setDriver] = useState('');
   const [start, setStart] = useState(() => localDaysAgo(5));
@@ -1508,6 +1508,8 @@ function Closures({ tickets, drivers: driverRecords, onGenerate }) {
   const matchKey = matches.map((ticket) => ticket.id).join('|');
   useEffect(() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id))), [matchKey]);
   const selectedMatches = matches.filter((ticket) => selectedTicketIds.has(ticket.id));
+  const pendingClosures = closures.filter((closure) => closure.status === 'Aguardando envio')
+    .sort((a, b) => Number(b.number) - Number(a.number));
   const handleGenerate = async () => {
     if (generating || !selectedMatches.length) return;
     setGenerating(true);
@@ -1524,6 +1526,9 @@ function Closures({ tickets, drivers: driverRecords, onGenerate }) {
         <div className="table-wrap closure-results"><table><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td></tr>)}</tbody></table></div>
         <div className="closure-action"><span>O fechamento será somente de {driver} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
       </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket aberto encontrado nesse período. Os resultados mudam automaticamente ao alterar os filtros.</span></div>}
+    </section>
+    <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
+      {pendingClosures.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button></td></tr>)}</tbody></table></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
     </section>
   </>;
 }
