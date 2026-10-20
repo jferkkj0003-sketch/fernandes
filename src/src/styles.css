@@ -159,3 +159,7 @@
 .history-totals .metric-value{font-size:18px;margin-top:3px}
 .history-totals .metric-foot{font-size:9px}
 @media(max-width:520px){.history-totals{grid-template-columns:1fr;gap:8px}.history-totals .metric-card{min-height:92px;padding:11px 13px}.history-totals .metric-icon{width:27px;height:27px;margin-bottom:5px}.history-totals .metric-value{font-size:17px}}
+/* Painel de controle: filtros e indicadores da operação */
+.dashboard-primary-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}.dashboard-status-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-insights-grid{grid-template-columns:minmax(0,1.25fr) minmax(360px,.95fr)}.dashboard-filter-panel>.filter-fields{margin-bottom:12px}.dashboard-periods{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:10px;color:#8492a3;font-size:11px}.dashboard-periods .text-button{padding:6px 9px;border-radius:7px;background:#f2f5fa;font-size:11px}.dashboard-periods .text-button:hover{background:#e7eef9}.dashboard-chart-panel,.dashboard-driver-panel{min-width:0}.dashboard-chart-panel .panel-heading p,.dashboard-driver-panel .panel-heading p{line-height:1.5}
+@media(max-width:1100px){.dashboard-primary-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-insights-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.dashboard-primary-metrics,.dashboard-status-metrics{grid-template-columns:1fr}.dashboard-periods{gap:5px}.dashboard-periods .text-button{padding:6px 7px}}
