@@ -968,7 +968,7 @@ export default function App() {
             <section className="content">
               {notice && <div className="notice"><span className="status-dot amber" />{notice}<button className="notice-close" onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={16} /></button></div>}
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
-              {page === 'painel' && <Dashboard totals={totals} tickets={tickets} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
+              {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
               {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onMarkRequested={markClosureRequested} />}
               {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
@@ -992,24 +992,97 @@ function PageHeading({ eyebrow = 'VISÃO GERAL', title, subtitle, action }) {
   return <div className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>{action}</div>;
 }
 
-function Dashboard({ totals, tickets, isAdmin, goTo, onView, onEdit }) {
-  const recentTickets = [...tickets].sort((a, b) => {
+function Dashboard({ tickets, drivers: driverRecords, closures, isAdmin, goTo, onView, onEdit }) {
+  const [driverFilter, setDriverFilter] = useState('Todos');
+  const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
+  const [endDate, setEndDate] = useState(localToday);
+  const drivers = [...new Set([...driverRecords.map((driver) => driver.name), ...tickets.map((ticket) => ticket.driver)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const filteredTickets = tickets.filter((ticket) =>
+    (driverFilter === 'Todos' || ticket.driver === driverFilter) &&
+    (!startDate || ticket.dateISO >= startDate) &&
+    (!endDate || ticket.dateISO <= endDate),
+  );
+  const filteredClosures = closures.filter((closure) =>
+    (driverFilter === 'Todos' || closure.driver === driverFilter) &&
+    (!startDate || closure.end >= startDate) &&
+    (!endDate || closure.start <= endDate),
+  );
+  const dashboardTotals = filteredTickets.reduce((result, ticket) => ({
+    weight: result.weight + Number(ticket.weight || 0),
+    gross: result.gross + Number(ticket.gross || 0),
+    discount: result.discount + Number(ticket.discount || 0),
+  }), { weight: 0, gross: 0, discount: 0 });
+  const openTickets = filteredTickets.filter((ticket) => ticket.status === 'Aberto');
+  const awaitingClosures = filteredClosures.filter((closure) => closure.status === 'Aguardando envio');
+  const requestedClosures = filteredClosures.filter((closure) => closure.status === 'Solicitado');
+  const byDriver = drivers.map((name) => {
+    const items = filteredTickets.filter((ticket) => ticket.driver === name);
+    return { name, count: items.length, weight: items.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0), total: items.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0) };
+  }).filter((item) => item.count).sort((a, b) => b.total - a.total);
+  const recentTickets = [...filteredTickets].sort((a, b) => {
     const aCreated = Date.parse(a.createdAt || '') || 0;
     const bCreated = Date.parse(b.createdAt || '') || 0;
     if (aCreated || bCreated) return bCreated - aCreated;
     return (b.dateISO || '').localeCompare(a.dateISO || '');
-  }).slice(0, 4);
+  }).slice(0, 8);
+  const dailyActivity = Object.values(filteredTickets.reduce((days, ticket) => {
+    const key = ticket.dateISO || 'sem-data';
+    if (!days[key]) days[key] = { date: key, count: 0, total: 0 };
+    days[key].count += 1;
+    days[key].total += Number(ticket.gross || 0) - Number(ticket.discount || 0);
+    return days;
+  }, {})).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  const maxDailyValue = Math.max(1, ...dailyActivity.map((day) => day.total));
+  const setQuickPeriod = (period) => {
+    const today = localToday();
+    setEndDate(today);
+    if (period === 'today') setStartDate(today);
+    else if (period === '7') setStartDate(localDaysAgo(6));
+    else if (period === '30') setStartDate(localDaysAgo(29));
+    else if (period === 'month') setStartDate(`${today.slice(0, 7)}-01`);
+    else { setStartDate(''); setEndDate(''); }
+  };
+  const formatWeight = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
+  const closureTotal = (items) => items.reduce((sum, item) => sum + Number(item.total || 0), 0);
   return <>
-    <PageHeading title="Início" subtitle="Veja o que falta fechar e acompanhe os relatórios enviados." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
-    <div className="metrics-grid home-metrics-grid">
-      <Metric icon={ClipboardList} label="Tickets em aberto" value={money(totals.openTotal)} tint="blue" foot={`${totals.openCount} ticket(s) aguardando fechamento`} />
-      <Metric icon={CreditCard} label="Aguardando envio" value={money(totals.awaitingRequestTotal)} tint="amber" foot={`${totals.awaitingRequestCount} fechamento(s) ainda não enviados`} />
-      <Metric icon={Check} label="Solicitado por e-mail" value={money(totals.requestedTotal)} tint="green" foot={`${totals.requestedCount} fechamento(s) enviados`} />
+    <PageHeading eyebrow="CENTRAL DA OPERAÇÃO" title="Painel de controle" subtitle="Acompanhe entregas, peso, valores e fechamentos em um só lugar." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
+    <section className="panel dashboard-filter-panel">
+      <div className="panel-heading"><div><h2>Filtrar painel</h2><p>Todos os indicadores acompanham o motorista e o período selecionados.</p></div></div>
+      <div className="filter-fields dashboard-filters">
+        <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((name) => <option key={name}>{name}</option>)}</select></label>
+        <label>Data inicial<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
+        <label>Data final<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+      </div>
+      <div className="selection-toolbar dashboard-periods"><span>Período rápido:</span><button className="text-button" onClick={() => setQuickPeriod('today')}>Hoje</button><button className="text-button" onClick={() => setQuickPeriod('7')}>7 dias</button><button className="text-button" onClick={() => setQuickPeriod('30')}>30 dias</button><button className="text-button" onClick={() => setQuickPeriod('month')}>Este mês</button><button className="text-button" onClick={() => setQuickPeriod('all')}>Todo período</button></div>
+    </section>
+    <div className="metrics-grid home-metrics-grid dashboard-primary-metrics">
+      <Metric icon={ClipboardList} label="Entregas" value={filteredTickets.length.toLocaleString('pt-BR')} tint="blue" foot="Tickets no período filtrado" />
+      <Metric icon={Truck} label="Peso total" value={formatWeight(dashboardTotals.weight)} tint="green" foot="Peso das entregas filtradas" />
+      <Metric icon={BadgeDollarSign} label="Valor bruto" value={money(dashboardTotals.gross)} tint="violet" foot="Antes dos descontos" />
+      <Metric icon={CreditCard} label="Descontos" value={money(dashboardTotals.discount)} tint="amber" foot="Descontos nos tickets filtrados" />
+      <Metric icon={Check} label="Valor líquido" value={money(dashboardTotals.gross - dashboardTotals.discount)} tint="green" foot="Bruto menos descontos" />
+    </div>
+    <div className="metrics-grid home-metrics-grid dashboard-status-metrics">
+      <Metric icon={ClipboardList} label="Tickets em aberto" value={money(openTickets.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))} tint="blue" foot={`${openTickets.length} ticket(s) aguardando fechamento`} />
+      <Metric icon={CreditCard} label="Aguardando envio" value={money(closureTotal(awaitingClosures))} tint="amber" foot={`${awaitingClosures.length} fechamento(s)`} />
+      <Metric icon={Check} label="Solicitados por e-mail" value={money(closureTotal(requestedClosures))} tint="green" foot={`${requestedClosures.length} fechamento(s) enviados`} />
+    </div>
+    <div className="dashboard-grid dashboard-insights-grid">
+      <section className="panel dashboard-chart-panel">
+        <div className="panel-heading"><div><h2>Movimento diário</h2><p>Valor líquido dos tickets por dia · até 14 dias com lançamentos</p></div></div>
+        {dailyActivity.length ? <div className="dashboard-bars" role="img" aria-label="Gráfico de valor líquido por dia" style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 190, padding: '12px 4px 0', overflowX: 'auto' }}>
+          {dailyActivity.map((day) => <div key={day.date} title={`${day.date === 'sem-data' ? 'Sem data' : formatDate(day.date)} · ${money(day.total)} · ${day.count} entrega(s)`} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 6, minWidth: 34, height: '100%', flex: 1 }}><strong style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{money(day.total)}</strong><div style={{ width: 'min(100%, 42px)', height: `${Math.max(5, day.total / maxDailyValue * 100)}%`, minHeight: 5, borderRadius: '6px 6px 0 0', background: 'linear-gradient(180deg, #5592ff, #2864d8)' }} /><small style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{day.date === 'sem-data' ? '—' : formatDate(day.date).slice(0, 5)}</small></div>)}
+        </div> : <div className="empty-state">Nenhum ticket encontrado neste período.</div>}
+      </section>
+      <section className="panel dashboard-driver-panel">
+        <div className="panel-heading"><div><h2>Resumo por motorista</h2><p>Entregas, peso e valor líquido no filtro atual</p></div></div>
+        {byDriver.length ? <div className="table-wrap"><table><thead><tr><th>MOTORISTA</th><th>ENTREGAS</th><th>PESO</th><th>LÍQUIDO</th></tr></thead><tbody>{byDriver.map((item) => <tr key={item.name}><td><strong>{item.name}</strong></td><td>{item.count}</td><td>{formatWeight(item.weight)}</td><td><strong>{money(item.total)}</strong></td></tr>)}</tbody></table></div> : <div className="empty-state">Nenhuma entrega encontrada neste período.</div>}
+      </section>
     </div>
     <div className="dashboard-grid">
       <section className="panel recent-panel">
-        <div className="panel-heading"><div><h2>Tickets recentes</h2><p>Últimos lançamentos da operação</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
-        <TicketTable tickets={recentTickets} compact onView={onView} onEdit={onEdit} />
+        <div className="panel-heading"><div><h2>Tickets recentes</h2><p>{recentTickets.length} lançamento(s) mais recentes dentro do filtro</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
+        <TicketTable tickets={recentTickets} onView={onView} onEdit={onEdit} />
       </section>
       <section className="panel quick-panel">
         <div className="panel-heading"><div><h2>Acesso rápido</h2><p>Atalhos da operação</p></div></div>

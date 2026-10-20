@@ -151,3 +151,8 @@
 :root[data-theme="dark"] .operator-account-info strong{color:#e4ebf4}
 :root[data-theme="dark"] .invite-card h1{color:#e4ebf4}
 @media(max-width:520px){.operator-invite-form,.operator-invite-result{grid-template-columns:1fr}.operator-account-row{align-items:flex-start;flex-direction:column}.operator-account-actions{width:100%}.operator-account-actions .button{flex:1}.operator-access .account-share-heading p{max-width:230px}}
+
+/* Painel de controle: filtros e indicadores da operação */
+.dashboard-primary-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}.dashboard-status-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-insights-grid{grid-template-columns:minmax(0,1.25fr) minmax(360px,.95fr)}.dashboard-filter-panel>.filter-fields{margin-bottom:12px}.dashboard-periods{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:10px;color:#8492a3;font-size:11px}.dashboard-periods .text-button{padding:6px 9px;border-radius:7px;background:#f2f5fa;font-size:11px}.dashboard-periods .text-button:hover{background:#e7eef9}.dashboard-chart-panel,.dashboard-driver-panel{min-width:0}.dashboard-chart-panel .panel-heading p,.dashboard-driver-panel .panel-heading p{line-height:1.5}
+@media(max-width:1100px){.dashboard-primary-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-insights-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.dashboard-primary-metrics,.dashboard-status-metrics{grid-template-columns:1fr}.dashboard-periods{gap:5px}.dashboard-periods .text-button{padding:6px 7px}}
