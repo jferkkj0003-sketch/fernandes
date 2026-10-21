@@ -164,3 +164,62 @@
   .preview-driver-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Dialogs must fit the available height, including short desktop windows. */
+:root { scrollbar-gutter: stable; }
+.modal-backdrop {
+  --modal-inset: 18px;
+  --modal-height: calc(100dvh - max(var(--modal-inset), env(safe-area-inset-top, 0px)) - max(var(--modal-inset), env(safe-area-inset-bottom, 0px)));
+  padding: max(var(--modal-inset), env(safe-area-inset-top, 0px)) var(--modal-inset) max(var(--modal-inset), env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.modal-backdrop > .edit-modal {
+  min-height: 0;
+  max-height: calc(100vh - 36px);
+  max-height: var(--modal-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.modal-backdrop > .ticket-edit-modal {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ticket-edit-modal > .panel-heading { flex: none; }
+.ticket-edit-modal > .edit-ticket-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.edit-ticket-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 4px 12px;
+}
+.edit-ticket-fields > * { min-width: 0; }
+.ticket-edit-modal .edit-ticket-form > .form-actions {
+  position: static;
+  flex: none;
+  margin: 0;
+  padding: 14px 0 0;
+  background: var(--surface);
+}
+.ticket-edit-modal .form-actions .button { min-height: 44px; white-space: normal; }
+.ticket-edit-modal .edit-ticket-form > .admin-delete-error { flex: none; }
+@media (max-width: 800px) {
+  .modal-backdrop { --modal-inset: 12px; }
+}
+@media (max-width: 520px) {
+  .edit-ticket-fields { grid-template-columns: minmax(0, 1fr); }
+  .edit-ticket-fields .modal-wide, .edit-ticket-fields .edit-help { grid-column: 1 / -1; }
+}
