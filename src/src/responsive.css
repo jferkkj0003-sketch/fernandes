@@ -223,3 +223,5 @@
   .edit-ticket-fields { grid-template-columns: minmax(0, 1fr); }
   .edit-ticket-fields .modal-wide, .edit-ticket-fields .edit-help { grid-column: 1 / -1; }
 }
+
+.modal-backdrop[hidden] { display: none; }
