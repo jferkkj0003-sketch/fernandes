@@ -300,18 +300,29 @@ export default function App() {
   const [driverActiveBusy, setDriverActiveBusy] = useState(false);
   const [closureToEdit, setClosureToEdit] = useState(null);
   const scanPrefetchSignature = useRef('');
+  const pageScrollLocked = Boolean(mobileNav || editingTicket || viewingTicket || accountOpen || closureToDelete || ticketToDelete || driverToUpdate || closureToEdit);
+
+  useEffect(() => {
+    if (!pageScrollLocked) return undefined;
+    const root = document.documentElement;
+    const previousRootOverflow = root.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    root.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [pageScrollLocked]);
 
   useEffect(() => {
     if (!mobileNav) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     const closeOnEscape = (event) => { if (event.key === 'Escape') setMobileNav(false); };
     const mobileMedia = window.matchMedia('(max-width: 800px)');
     const closeOnDesktop = () => { if (!mobileMedia.matches) setMobileNav(false); };
     document.addEventListener('keydown', closeOnEscape);
     mobileMedia.addEventListener('change', closeOnDesktop);
     return () => {
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', closeOnEscape);
       mobileMedia.removeEventListener('change', closeOnDesktop);
     };
@@ -1354,6 +1365,7 @@ function TicketEditModal({ ticket, drivers, requirePassword, onClose, onSave }) 
     <section className="edit-modal ticket-edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-ticket-title">
       <div className="panel-heading"><div><h2 id="edit-ticket-title">Editar ticket {ticket.number}</h2><p>{ticket.driver} · {ticket.date}</p></div><button className="icon-button" aria-label="Fechar" disabled={saving} onClick={onClose}><X size={18} /></button></div>
       <form className="edit-ticket-form" onSubmit={submit}>
+        <div className="edit-ticket-fields">
         <label>Data *<input name="date" type="date" defaultValue={ticket.dateISO || localToday()} required /></label>
         <label>Nº do ticket *<input name="number" defaultValue={ticket.number} required autoFocus /></label>
         <label>Motorista *<select name="driver" defaultValue={recordDriverKey(ticket)} required>{drivers.filter((driver) => driver.active !== false || matchesDriver(ticket, driver)).map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}{driver.active === false ? " (inativo)" : ""}</option>)}</select></label>
@@ -1366,6 +1378,7 @@ function TicketEditModal({ ticket, drivers, requirePassword, onClose, onSave }) 
         <p className="edit-help">Tickets de fechamento ainda não solicitado podem ser editados. Se mudar a data ou o motorista, o ticket volta para aberto para entrar no fechamento correto.</p>
         {requirePassword && <label className="modal-wide closure-edit-password">Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>}
         {requirePassword && <small className="modal-wide">A senha é validada pela conta e não fica salva no aplicativo.</small>}
+        </div>
         {error && <p className="admin-delete-error modal-wide" role="alert">{error}</p>}
         <div className="form-actions"><button className="button secondary" type="button" disabled={saving} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={saving || (requirePassword && !password)}><Check size={16} /> {saving ? 'Validando e salvando…' : 'Salvar alterações'}</button></div>
       </form>
