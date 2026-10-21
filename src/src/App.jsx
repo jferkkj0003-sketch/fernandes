@@ -1727,7 +1727,7 @@ function EditPasswordModal({ busy, error, onBack, onConfirm }) {
   return <div className="modal-backdrop" role="presentation">
     <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="edit-password-title">
       <div className="panel-heading"><div><h2 id="edit-password-title">Confirmar alterações</h2><p>Digite a senha da sua conta administradora para salvar.</p></div></div>
-      <form onSubmit={(event) => { event.preventDefault(); if (!busy && password) onConfirm(password); }}>
+      <form className="admin-delete-form" onSubmit={(event) => { event.preventDefault(); if (!busy && password) onConfirm(password); }}>
         <label>Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus disabled={busy} /></label>
         {error && <p className="admin-delete-error" role="alert">{error}</p>}
         <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onBack}>Voltar à edição</button><button className="button primary" type="submit" disabled={busy || !password}>{busy ? 'Validando e salvando…' : 'Confirmar e salvar'}</button></div>
