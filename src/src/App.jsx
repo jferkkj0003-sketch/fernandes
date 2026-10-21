@@ -615,10 +615,8 @@ export default function App() {
     window.setTimeout(() => setNotice(''), 5000);
   }
 
-  async function saveDriver(event, adminPassword) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(event.currentTarget);
+  async function saveDriver(formElement, adminPassword) {
+    const form = new FormData(formElement);
     const name = String(form.get('name') || '').trim();
     if (!name) return false;
     const record = {
@@ -648,7 +646,9 @@ export default function App() {
         const message = error.code === '23505' ? 'Já existe um motorista com esse nome.' : (error.message || 'tente novamente');
         setNotice(`Não foi possível salvar o motorista: ${message}`);
         setCloudBusy(false);
-        return false;
+        throw new Error(/invalid login credentials|invalid password|credentials/i.test(message)
+          ? 'Senha incorreta. Confira a senha da sua conta administradora e tente novamente.'
+          : `Não foi possível salvar o motorista: ${message}`);
       }
       setCloudBusy(false);
       formElement.reset();
@@ -1708,16 +1708,39 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
 
 function Drivers({ drivers, onSave, onChangeActive }) {
   const [editing, setEditing] = useState(null);
+  const formRef = useRef(null);
+  const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const save = async (password = '') => {
+    if (saving) return;
+    setSaving(true); setError('');
+    try {
+      const saved = await onSave(formRef.current, password);
+      if (saved) { setConfirming(false); setEditing(null); }
+      else setError('Não foi possível salvar. Confira a senha e tente novamente.');
+    } catch (saveError) {
+      setError(saveError.message || 'Não foi possível salvar as alterações.');
+    } finally { setSaving(false); }
+  };
+  const submit = (event) => {
+    event.preventDefault();
+    if (saving) return;
+    setError('');
+    if (editing.id && cloudConfigured) setConfirming(true);
+    else save();
+  };
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ativos');
   const visible = drivers.filter((driver) => driver.name.toLowerCase().includes(query.toLowerCase()) && (status === 'todos' || (status === 'ativos' ? driver.active !== false : driver.active === false)));
   return <><PageHeading eyebrow="CADASTROS" title="Motoristas" subtitle="Cadastros e dados que acompanham cada solicitação." action={<button className="button primary" onClick={() => setEditing({})}><Plus size={17} /> Novo motorista</button>} />
-    {editing && <section className="panel driver-form-panel"><div className="panel-heading"><div><h2>{editing.name ? 'Editar motorista' : 'Novo motorista'}</h2><p>Os dados bancários aparecerão no relatório do fechamento.</p></div><button className="icon-button" aria-label="Fechar formulário" onClick={() => setEditing(null)}><X size={18} /></button></div><form key={editing.id || editing.name || 'new'} onSubmit={async (event) => { let password = ''; if (editing.id && cloudConfigured) { password = window.prompt('Digite a senha da conta administradora para editar este motorista.') || ''; if (!password) return; } const saved = await onSave(event, password); if (saved) setEditing(null); }}>
+    {editing && <section className="panel driver-form-panel"><div className="panel-heading"><div><h2>{editing.name ? 'Editar motorista' : 'Novo motorista'}</h2><p>Os dados bancários aparecerão no relatório do fechamento.</p></div><button className="icon-button" aria-label="Fechar formulário" disabled={saving} onClick={() => setEditing(null)}><X size={18} /></button></div><form ref={formRef} key={editing.id || editing.name || 'new'} onSubmit={submit}>
       <input type="hidden" name="driverId" value={editing.id || ''} /><input type="hidden" name="originalName" value={editing.name || ''} />
       <div className="filter-fields driver-fields"><label>Nome completo *<input name="name" defaultValue={editing.name || ''} placeholder="Nome do motorista" required /></label><label>Placa<input name="plate" defaultValue={editing.plate || ''} placeholder="ABC-1D23" /></label><label>Frete padrão (R$) *<input name="defaultFare" type="number" min="0" step="0.01" defaultValue={editing.defaultFare ?? 1000} required /></label><label>CPF<input name="cpf" defaultValue={editing.cpf || ''} placeholder="000.000.000-00" /></label><label>Chave PIX<input name="pix" defaultValue={editing.pix || ''} placeholder="Chave PIX" /></label><label>Banco<input name="bank" defaultValue={editing.bank || ''} placeholder="Nome do banco" /></label><label>Tipo de conta<input name="accountType" defaultValue={editing.accountType || ''} placeholder="Corrente ou poupança" /></label><label>Agência<input name="branch" defaultValue={editing.branch || ''} placeholder="Número da agência" /></label><label>Conta<input name="account" defaultValue={editing.account || ''} placeholder="Número da conta" /></label></div>
       <div className="form-actions"><span><span className="status-dot amber" /> {cloudConfigured ? 'Os dados serão salvos na nuvem.' : 'Demonstração local: os dados não vão para a nuvem.'}</span><button className="button primary" type="submit"><Check size={16} /> {editing.name ? 'Salvar alterações' : 'Salvar motorista'}</button></div>
     </form></section>}
     <section className="panel drivers-panel"><div className="panel-heading"><div><h2>Motoristas cadastrados <span className="subtle-count">{drivers.length}</span></h2><p>Inative motoristas para impedir novos lançamentos. Os tickets, comprovantes e fechamentos são preservados.</p></div><label className="search-box driver-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista" /></label></div><label className="driver-status-filter">Situação<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ativos">Ativos</option><option value="inativos">Inativos</option><option value="todos">Todos</option></select></label><div className="driver-list">{visible.map((driver) => <article className="driver-row" key={driver.id || driver.name}><div className="driver-avatar">{driver.name.slice(0, 2).toUpperCase()}</div><div className="driver-main"><strong>{driver.name} <span className={`status-badge ${driver.active === false ? "pendente" : "aberto"}`}>{driver.active === false ? "Inativo" : "Ativo"}</span></strong><span>Placa {driver.plate || 'não informada'} · {driver.bank || 'Banco não informado'} · PIX {driver.pix || 'não informada'}</span><small>{driver.cpf || 'CPF não informado'} · {driver.accountType || 'Tipo de conta não informado'} · Agência {driver.branch || '—'} · Conta {driver.account || '—'}</small></div><div className="driver-actions"><button className="button secondary small-button" onClick={() => setEditing(driver)}><Pencil size={13} /> Editar</button><button className="button secondary small-button" onClick={() => onChangeActive(driver)}><RefreshCw size={13} /> {driver.active === false ? "Reativar" : "Inativar"}</button></div></article>)}</div>{visible.length === 0 && <div className="empty-state">Nenhum motorista encontrado.</div>}</section>
+    {confirming && <EditPasswordModal busy={saving} error={error} onBack={() => { setConfirming(false); setError(''); }} onConfirm={save} />}
   </>;
 }
 
