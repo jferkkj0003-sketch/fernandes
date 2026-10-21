@@ -10,6 +10,7 @@ import {
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
+import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 
 const initialTickets = [
@@ -40,11 +41,6 @@ const localDaysAgo = (days) => {
   const date = new Date();
   date.setDate(date.getDate() - days);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
-const isWithinClosureDeleteWindow = (closure) => {
-  if (closure.status !== 'Solicitado') return true;
-  const sentAt = Date.parse(closure.sentAt || closure.createdAt || '');
-  return Number.isFinite(sentAt) && Date.now() - sentAt <= 5 * 24 * 60 * 60 * 1000;
 };
 const formatDate = (value) => {
   if (!value) return '';
@@ -465,7 +461,7 @@ export default function App() {
   function canDeleteTicket(ticket) {
     if ((ticket.requestStatus || ticket.status) !== 'Solicitado') return true;
     const closure = closures.find((item) => item.ticketIds?.includes(ticket.id));
-    return Boolean(closure && isWithinClosureDeleteWindow(closure));
+    return Boolean(closure && isWithinClosureChangeWindow(closure));
   }
 
   async function saveTicket(event) {
@@ -544,7 +540,7 @@ export default function App() {
       window.setTimeout(() => setNotice(''), 5000);
       return;
     }
-    setClosures((current) => current.map((item) => item.id === closure.id ? { ...item, status: 'Solicitado' } : item));
+    setClosures((current) => current.map((item) => item.id === closure.id ? { ...item, status: 'Solicitado', sentAt: new Date().toISOString() } : item));
     const ticketIds = new Set(closure.ticketIds || []);
     setTickets((current) => current.map((ticket) => ticketIds.has(ticket.id) ? { ...ticket, requestStatus: 'Solicitado' } : ticket));
     setNotice('Solicitação registrada nesta demonstração; ainda não foi salva na nuvem.');
@@ -724,7 +720,7 @@ export default function App() {
       return;
     }
     if (!canDeleteTicket(ticket)) {
-      setNotice('O prazo para excluir um ticket de fechamento enviado já terminou (5 dias).');
+      setNotice('O prazo para excluir um ticket de fechamento enviado já terminou (2 dias).');
       window.setTimeout(() => setNotice(''), 6000);
       return;
     }
@@ -846,8 +842,8 @@ export default function App() {
   }
 
   function deleteClosure(closure) {
-    if (!isWithinClosureDeleteWindow(closure)) {
-      setNotice('O prazo para remover este fechamento enviado já terminou (5 dias).');
+    if (!isWithinClosureChangeWindow(closure)) {
+      setNotice('O prazo para remover este fechamento enviado já terminou (2 dias).');
       window.setTimeout(() => setNotice(''), 6000);
       return;
     }
@@ -865,8 +861,8 @@ export default function App() {
     event.preventDefault();
     const closure = closureToDelete;
     if (!closure || deleteBusy) return;
-    if (!isWithinClosureDeleteWindow(closure)) {
-      setDeletePasswordMessage('O prazo para remover este fechamento enviado já terminou (5 dias).');
+    if (!isWithinClosureChangeWindow(closure)) {
+      setDeletePasswordMessage('O prazo para remover este fechamento enviado já terminou (2 dias).');
       return;
     }
     setDeleteBusy(true);
@@ -905,6 +901,7 @@ export default function App() {
 
   async function saveClosureEdit(closure, ticketLines, password) {
     if (!isAdmin) throw new Error('Somente o administrador pode editar fechamentos.');
+    if (!isWithinClosureChangeWindow(closures.find((item) => item.id === closure.id) || closure)) throw new Error('Prazo de edição encerrado após 2 dias do envio.');
     if (!ticketLines.length) throw new Error('Mantenha pelo menos um ticket no fechamento.');
     if (ticketLines.some((ticket) => !Number.isFinite(Number(ticket.gross)) || !Number.isFinite(Number(ticket.discount)) || Number(ticket.gross) < 0 || Number(ticket.discount) < 0 || Number(ticket.discount) > Number(ticket.gross))) {
       throw new Error('Confira os valores: o desconto não pode ser maior que o valor bruto.');
@@ -1031,7 +1028,7 @@ export default function App() {
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
               {page === 'fechamentos' && <Closures tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
-              {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? setClosureToEdit : null} />}
+              {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
@@ -1251,7 +1248,7 @@ function TicketTable({ tickets, onView, onEdit, onDelete, canDeleteTicket, compa
           <td>{ticket.driver}</td><td>{ticket.plate}</td>{!compact && <td>{ticket.weight.toLocaleString('pt-BR')} kg</td>}
           <td><strong>{money(ticket.gross - ticket.discount)}</strong></td>
           <td><span className={`status-badge ${statusClass}`}><i />{statusLabel}</span>{compact && onView && <div className="compact-ticket-actions"><button className="row-action compact-ticket-view" aria-label={`Ver ticket ${ticket.number}`} title="Ver ticket" onClick={() => onView(ticket)}><Eye size={13} /> Ver</button>{!requested && onEdit && <button className="row-action compact-ticket-view" aria-label={`Editar ticket ${ticket.number}`} title="Editar ticket" onClick={() => onEdit(ticket)}><Pencil size={13} /> Editar</button>}</div>}</td>
-          {!compact && <td className="ticket-actions">{onView && <button className="row-action" onClick={() => onView(ticket)}><Eye size={13} /> Ver</button>}{onEdit && !requested && <button className="row-action" onClick={() => onEdit(ticket)}><Pencil size={13} /> Editar</button>}{onDelete && <button className="row-action danger-action" disabled={canDeleteTicket && !canDeleteTicket(ticket)} title={canDeleteTicket && !canDeleteTicket(ticket) ? 'Prazo de exclusão encerrado após 5 dias.' : undefined} onClick={() => onDelete(ticket)}>Excluir</button>}</td>}
+          {!compact && <td className="ticket-actions">{onView && <button className="row-action" onClick={() => onView(ticket)}><Eye size={13} /> Ver</button>}{onEdit && !requested && <button className="row-action" onClick={() => onEdit(ticket)}><Pencil size={13} /> Editar</button>}{onDelete && <button className="row-action danger-action" disabled={canDeleteTicket && !canDeleteTicket(ticket)} title={canDeleteTicket && !canDeleteTicket(ticket) ? 'Prazo de exclusão encerrado após 2 dias.' : undefined} onClick={() => onDelete(ticket)}>Excluir</button>}</td>}
         </tr>
       );
     }) : <tr className="ticket-empty-row"><td colSpan={compact ? 6 : 8} className="empty-state">Nenhum ticket encontrado com esse filtro.</td></tr>}
@@ -1350,21 +1347,22 @@ function TicketDetailModal({ ticket, onClose, canViewHistory }) {
 }
 
 function TicketEditModal({ ticket, drivers, requirePassword, onClose, onSave }) {
-  const [password, setPassword] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const formRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const submit = async (event) => {
-    event.preventDefault();
+  const save = async (password = '') => {
     if (saving) return;
     setSaving(true); setError('');
-    try { await onSave(event, password); }
+    try { await onSave({ preventDefault() {}, currentTarget: formRef.current }, password); }
     catch (saveError) { setError(saveError.message || 'Não foi possível salvar as alterações.'); }
     finally { setSaving(false); }
   };
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  const submit = (event) => { event.preventDefault(); if (requirePassword) { setError(''); setConfirming(true); } else save(); };
+  return <><div hidden={confirming} className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="edit-modal ticket-edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-ticket-title">
       <div className="panel-heading"><div><h2 id="edit-ticket-title">Editar ticket {ticket.number}</h2><p>{ticket.driver} · {ticket.date}</p></div><button className="icon-button" aria-label="Fechar" disabled={saving} onClick={onClose}><X size={18} /></button></div>
-      <form className="edit-ticket-form" onSubmit={submit}>
+      <form ref={formRef} className="edit-ticket-form" onSubmit={submit}>
         <div className="edit-ticket-fields">
         <label>Data *<input name="date" type="date" defaultValue={ticket.dateISO || localToday()} required /></label>
         <label>Nº do ticket *<input name="number" defaultValue={ticket.number} required autoFocus /></label>
@@ -1376,14 +1374,12 @@ function TicketEditModal({ ticket, drivers, requirePassword, onClose, onSave }) 
         <label className="modal-wide">Observação<input name="note" defaultValue={ticket.note || ''} placeholder="Opcional" /></label>
         <label className="modal-wide">Trocar comprovante (opcional)<input name="scan" type="file" accept="application/pdf,.pdf,image/*" />{ticket.scanName && <small>Atual: {ticket.scanName}. Se não selecionar outro arquivo, ele será mantido.</small>}</label>
         <p className="edit-help">Tickets de fechamento ainda não solicitado podem ser editados. Se mudar a data ou o motorista, o ticket volta para aberto para entrar no fechamento correto.</p>
-        {requirePassword && <label className="modal-wide closure-edit-password">Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>}
-        {requirePassword && <small className="modal-wide">A senha é validada pela conta e não fica salva no aplicativo.</small>}
         </div>
         {error && <p className="admin-delete-error modal-wide" role="alert">{error}</p>}
-        <div className="form-actions"><button className="button secondary" type="button" disabled={saving} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={saving || (requirePassword && !password)}><Check size={16} /> {saving ? 'Validando e salvando…' : 'Salvar alterações'}</button></div>
+        <div className="form-actions"><button className="button secondary" type="button" disabled={saving} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={saving}><Check size={16} /> {saving ? 'Validando e salvando…' : 'Salvar alterações'}</button></div>
       </form>
     </section>
-  </div>;
+  </div>{confirming && <EditPasswordModal busy={saving} error={error} onBack={() => { setConfirming(false); setError(''); }} onConfirm={save} />}</>;
 }
 
 function DashboardShareManager({ isAdmin }) {
@@ -1648,13 +1644,15 @@ function ClosurePreviewModal({ closure, onClose, onDownload }) {
 }
 
 function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload, onDelete, onEdit }) {
+  const [, refreshTime] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => refreshTime((value) => value + 1), 1000); return () => window.clearInterval(timer); }, []);
   const ordered = [...closures].sort((a, b) => (a.status === b.status ? Number(b.number) - Number(a.number) : a.status === 'Aguardando envio' ? -1 : 1));
   const waiting = ordered.filter((closure) => closure.status === 'Aguardando envio');
   const sent = ordered.filter((closure) => closure.status === 'Solicitado');
   return <><PageHeading eyebrow="CONSULTA" title="Histórico" subtitle="Consulte os fechamentos anteriores e acompanhe o status do envio." />
     <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
-    <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Os pendentes de envio aparecem primeiro; marque quando o e-mail for enviado.</p></div></div>
-      {ordered.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureDeleteWindow(item)} title={!isWithinClosureDeleteWindow(item) ? 'Prazo de remoção encerrado após 5 dias.' : 'Os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
+    <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Edição e remoção disponíveis por 2 dias após marcar o e-mail enviado. Depois, o histórico fica disponível para consulta e PDF.</p></div></div>
+      {ordered.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions">{canDelete && <button className="button secondary small-button" disabled={!isWithinClosureChangeWindow(item)} title={!isWithinClosureChangeWindow(item) ? 'Prazo de edição encerrado após 2 dias.' : undefined} onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureChangeWindow(item)} title={!isWithinClosureChangeWindow(item) ? 'Prazo de remoção encerrado após 2 dias.' : 'Os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
     </section>
   </>;
 }
@@ -1664,7 +1662,7 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
     : tickets.filter((ticket) => closure.ticketIds?.includes(ticket.id));
   const [lines, setLines] = useState(() => initialLines.map((ticket) => ({ ...ticket })));
   const [candidateId, setCandidateId] = useState('');
-  const [password, setPassword] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const currentIds = new Set(lines.map((ticket) => ticket.id));
@@ -1681,8 +1679,7 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
     setLines((current) => [...current, { ...ticket }]);
     setCandidateId('');
   };
-  const submit = async (event) => {
-    event.preventDefault();
+  const save = async (password) => {
     if (saving) return;
     setSaving(true); setError('');
     try { await onSave(closure, lines, password); }
@@ -1690,7 +1687,8 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
     finally { setSaving(false); }
   };
 
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+  const submit = (event) => { event.preventDefault(); setError(''); setConfirming(true); };
+  return <><div hidden={confirming} className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
     <section className="edit-modal closure-editor-modal" role="dialog" aria-modal="true" aria-labelledby="closure-editor-title">
       <div className="panel-heading"><div><p className="eyebrow">CORRIGIR FECHAMENTO</p><h2 id="closure-editor-title">Fechamento {closure.number} · {closure.driver}</h2><p>{formatDate(closure.start)} a {formatDate(closure.end)}</p></div><button className="icon-button" aria-label="Fechar" disabled={saving} onClick={onClose}><X size={18} /></button></div>
       {requested && <p className="closure-edit-warning">Este fechamento já foi marcado como solicitado. Ao salvar a correção, ele volta para “Aguardando envio” para você baixar e enviar o PDF atualizado.</p>}
@@ -1701,12 +1699,11 @@ function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
         </article>)}</div>
         {candidates.length > 0 && <div className="closure-add-ticket"><label>Incluir ticket aberto deste motorista<select value={candidateId} onChange={(event) => setCandidateId(event.target.value)}><option value="">Selecione um ticket</option>{candidates.map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.number} · {ticket.date} · {money(ticket.gross - ticket.discount)}</option>)}</select></label><button className="button secondary" type="button" disabled={!candidateId} onClick={addTicket}><Plus size={15} /> Incluir</button></div>}
         <div className="closure-edit-total"><span>{lines.length} ticket(s)</span><strong>Total líquido: {money(total)}</strong></div>
-        <label className="closure-edit-password">Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
         {error && <p className="admin-delete-error" role="alert">{error}</p>}
-        <div className="form-actions"><button className="button secondary" type="button" disabled={saving} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={saving || !password || !lines.length}><Check size={16} /> {saving ? 'Salvando…' : 'Salvar correção'}</button></div>
+        <div className="form-actions"><button className="button secondary" type="button" disabled={saving} onClick={onClose}>Cancelar</button><button className="button primary" type="submit" disabled={saving || !lines.length}><Check size={16} /> {saving ? 'Salvando…' : 'Salvar correção'}</button></div>
       </form>
     </section>
-  </div>;
+  </div>{confirming && <EditPasswordModal busy={saving} error={error} onBack={() => { setConfirming(false); setError(''); }} onConfirm={save} />}</>;
 }
 
 function Drivers({ drivers, onSave, onChangeActive }) {
@@ -1724,3 +1721,17 @@ function Drivers({ drivers, onSave, onChangeActive }) {
   </>;
 }
 
+
+function EditPasswordModal({ busy, error, onBack, onConfirm }) {
+  const [password, setPassword] = useState('');
+  return <div className="modal-backdrop" role="presentation">
+    <section className="edit-modal admin-delete-modal" role="dialog" aria-modal="true" aria-labelledby="edit-password-title">
+      <div className="panel-heading"><div><h2 id="edit-password-title">Confirmar alterações</h2><p>Digite a senha da sua conta administradora para salvar.</p></div></div>
+      <form onSubmit={(event) => { event.preventDefault(); if (!busy && password) onConfirm(password); }}>
+        <label>Senha da sua conta administradora<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus disabled={busy} /></label>
+        {error && <p className="admin-delete-error" role="alert">{error}</p>}
+        <div className="form-actions"><button className="button secondary" type="button" disabled={busy} onClick={onBack}>Voltar à edição</button><button className="button primary" type="submit" disabled={busy || !password}>{busy ? 'Validando e salvando…' : 'Confirmar e salvar'}</button></div>
+      </form>
+    </section>
+  </div>;
+}
