@@ -220,7 +220,7 @@
 @media(max-width:800px){.overview-charts-grid{grid-template-columns:1fr}.overview-chart-card{padding:20px}.overview-metrics{grid-template-columns:1fr 1fr}}
 @media(max-width:500px){.overview-metrics{grid-template-columns:1fr}.overview-legend-row{font-size:12px}.overview-chart-total strong{font-size:18px}}
 .consultation-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:22px 0 0}
-.consultation-card{min-width:0;padding:22px;display:flex;flex-direction:column;gap:0}
+.consultation-card{min-width:0;padding:22px;display:flex;flex-direction:column;align-items:stretch;gap:0}
 .consultation-card-heading{display:flex;gap:10px;align-items:center;min-height:42px}
 .consultation-card-heading h2{font-size:15px;line-height:1.4;margin:0}
 .consultation-card-heading .shared-metric-icon{margin:0;flex:none}
