@@ -4,6 +4,11 @@ const manausDate = (date) => {
   return { year: part('year'), month: part('month'), day: part('day') };
 };
 
+// User-established starting point for the new consultation queue. Legacy
+// closures may have been marked as emailed/imported today, so sent_at alone
+// cannot tell whether they belong to the new queue. Preserve them in overview.
+export const REQUESTS_TRACKING_START_DATE = '2026-10-22';
+
 // Display-only weekly cycle. This never changes email status or payment records.
 // A request sent at/after Friday 17:00 Manaus belongs to the following week.
 export function requestArchiveAt(sentAt) {
@@ -21,6 +26,7 @@ export function requestArchiveAt(sentAt) {
 
 export function isCurrentRequest(closure, now = new Date()) {
   if (closure.email_status !== 'Solicitado') return false;
+  if (!closure.period_end || closure.period_end < REQUESTS_TRACKING_START_DATE) return false;
   const cutoff = requestArchiveAt(closure.sent_at);
   // Missing historical timestamps must not silently hide a request.
   return !cutoff || new Date(now).getTime() < new Date(cutoff).getTime();

@@ -1,6 +1,6 @@
 import React from 'react';
 import ResponsiveTable from './ResponsiveTable';
-import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
+import { isCurrentRequest, requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const date = (value) => value ? value.split('-').reverse().join('/') : '—';
 const cutoffLabel = (value) => value ? new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Manaus', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).format(new Date(value)) : 'Data de envio não informada';
@@ -12,8 +12,9 @@ export default function SharedPayments({ closures, requested = false, now }) {
       const sent = closure.email_status === 'Solicitado';
       const current = isCurrentRequest(closure, now);
       const cutoff = requestArchiveAt(closure.sent_at);
+      const legacy = !closure.period_end || closure.period_end < REQUESTS_TRACKING_START_DATE;
       return <tr key={closure.number}>
-        <td><strong>{String(closure.number).padStart(3, '0')}</strong></td><td>{closure.driver}</td><td>{date(closure.period_start)} – {date(closure.period_end)}</td><td>{closure.filteredCount}</td><td>{Number(closure.filteredWeight).toLocaleString('pt-BR')} kg</td><td><strong>{money(closure.filteredTotal)}</strong>{closure.filteredPartial && <small className="payment-date">Parte do fechamento neste período</small>}</td><td><span className={`status-badge ${sent ? 'solicitado' : 'pendente'}`}>{sent ? 'Solicitado por e-mail' : 'Fechado · aguardando envio'}</span></td><td>{sent ? <>{!current && <small className="payment-date">Ciclo encerrado</small>}{cutoffLabel(cutoff)}</> : 'Aguardando envio'}</td>
+        <td><strong>{String(closure.number).padStart(3, '0')}</strong></td><td>{closure.driver}</td><td>{date(closure.period_start)} – {date(closure.period_end)}</td><td>{closure.filteredCount}</td><td>{Number(closure.filteredWeight).toLocaleString('pt-BR')} kg</td><td><strong>{money(closure.filteredTotal)}</strong>{closure.filteredPartial && <small className="payment-date">Parte do fechamento neste período</small>}</td><td><span className={`status-badge ${sent ? 'solicitado' : 'pendente'}`}>{sent ? 'Solicitado por e-mail' : 'Fechado · aguardando envio'}</span></td><td>{sent && legacy ? 'Anterior ao ciclo atual' : sent ? <>{!current && <small className="payment-date">Ciclo encerrado</small>}{cutoffLabel(cutoff)}</> : 'Aguardando envio'}</td>
       </tr>;
     })}</tbody></ResponsiveTable></div> : <p className="shared-empty">{requested ? 'Nenhuma solicitação neste ciclo. As anteriores continuam na Visão geral.' : 'Nenhum fechamento para os filtros selecionados.'}</p>}
   </section>;
