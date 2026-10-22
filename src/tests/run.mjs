@@ -9,3 +9,4 @@ import './shared-payments.test.mjs';
 import './request-cycle.test.mjs';
 import './overview-charts.test.mjs';
 import './consultation.test.mjs';
+import './history-search.test.mjs';

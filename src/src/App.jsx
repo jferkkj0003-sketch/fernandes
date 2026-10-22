@@ -14,6 +14,7 @@ import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 import DownloadPreferences from './DownloadPreferences';
+import History from './History';
 import { downloadPreferences } from './lib/downloads';
 
 const initialTickets = [
@@ -1029,7 +1030,7 @@ export default function App() {
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
               {page === 'fechamentos' && <Closures onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
-              {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
+              {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
@@ -1645,19 +1646,6 @@ function ClosurePreviewModal({ closure, onClose, onDownload }) {
   </div>;
 }
 
-function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload, onDelete, onEdit }) {
-  const [, refreshTime] = useState(0);
-  useEffect(() => { const timer = window.setInterval(() => refreshTime((value) => value + 1), 1000); return () => window.clearInterval(timer); }, []);
-  const ordered = [...closures].sort((a, b) => (a.status === b.status ? Number(b.number) - Number(a.number) : a.status === 'Aguardando envio' ? -1 : 1));
-  const waiting = ordered.filter((closure) => closure.status === 'Aguardando envio');
-  const sent = ordered.filter((closure) => closure.status === 'Solicitado');
-  return <><PageHeading eyebrow="CONSULTA" title="Histórico" subtitle="Consulte os fechamentos anteriores e acompanhe o status do envio." />
-    <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
-    <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Edição e remoção disponíveis por 2 dias após marcar o e-mail enviado. Depois, o histórico fica disponível para consulta e PDF.</p></div></div>
-      {ordered.length ? <div className="table-wrap"><ResponsiveTable className="closure-history-table"><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions"><div className="closure-action-group">{canDelete && <button className="button secondary small-button" disabled={!isWithinClosureChangeWindow(item)} title={!isWithinClosureChangeWindow(item) ? 'Prazo de edição encerrado após 2 dias.' : undefined} onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureChangeWindow(item)} title={!isWithinClosureChangeWindow(item) ? 'Prazo de remoção encerrado após 2 dias.' : 'Remover do fechamento: os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover</button>}</div></td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
-    </section>
-  </>;
-}
 function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
   const initialLines = closure.ticketDetails?.length
     ? closure.ticketDetails
