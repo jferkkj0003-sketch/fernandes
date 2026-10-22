@@ -270,5 +270,5 @@
 @media (max-width: 520px) { .pdf-scan-preview { padding: 8px; } .pdf-scan-pagination { gap: 6px; font-size: 11px; } .pdf-scan-pagination .button { padding: 8px; } }
 
 /* Read the full-size proof by scrolling the dialog, with no nested viewer. */
-.modal-backdrop > .ticket-detail-modal { width: 100%; height: 100%; max-width: none; }
+.modal-backdrop > .ticket-detail-modal { width: min(100%, 1040px); height: auto; max-width: 1040px; }
 .ticket-detail-modal .ticket-detail-preview.image { max-height: none; height: auto; }
