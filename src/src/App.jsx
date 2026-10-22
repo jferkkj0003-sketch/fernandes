@@ -14,6 +14,10 @@ import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 import DownloadPreferences from './DownloadPreferences';
+import PaymentHistory from './PaymentHistory';
+import ClosurePaymentModal from './ClosurePaymentModal';
+import { saveCloudClosurePayment } from './lib/cloud';
+import { nextPaymentDate } from './lib/payments';
 import { downloadPreferences } from './lib/downloads';
 
 const initialTickets = [
@@ -296,8 +300,9 @@ export default function App() {
   const [driverActiveMessage, setDriverActiveMessage] = useState('');
   const [driverActiveBusy, setDriverActiveBusy] = useState(false);
   const [closureToEdit, setClosureToEdit] = useState(null);
+  const [paymentAction, setPaymentAction] = useState(null);
   const scanPrefetchSignature = useRef('');
-  const pageScrollLocked = Boolean(mobileNav || editingTicket || viewingTicket || accountOpen || closureToDelete || ticketToDelete || driverToUpdate || closureToEdit);
+  const pageScrollLocked = Boolean(mobileNav || editingTicket || viewingTicket || accountOpen || closureToDelete || ticketToDelete || driverToUpdate || closureToEdit || paymentAction);
 
   useEffect(() => {
     if (!pageScrollLocked) return undefined;
@@ -526,26 +531,30 @@ export default function App() {
     setPage('tickets');
   }
 
-  async function markClosureRequested(closure) {
-    if (closure.status !== 'Aguardando envio') return;
-    if (!window.confirm(`Você já enviou por e-mail o fechamento ${closure.number} de ${closure.driver}?`)) return;
+  function markClosureRequested(closure) {
+    if (closure.status === 'Aguardando envio') setPaymentAction({ closure, kind: 'request' });
+  }
+
+  async function confirmClosurePayment(date) {
+    const { closure, kind } = paymentAction;
     if (cloudConfigured && sessionUser) {
-      setCloudBusy(true);
-      try {
-        await requestCloudClosure(closure.id);
-        const data = await loadCloudData();
-        setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
-        setNotice(`Fechamento ${closure.number} marcado como solicitado por e-mail.`);
-      } catch (error) { setNotice(`Não foi possível atualizar a solicitação: ${error.message || 'tente novamente'}`); }
-      finally { setCloudBusy(false); }
-      window.setTimeout(() => setNotice(''), 5000);
-      return;
+      await saveCloudClosurePayment(closure.id, kind, date);
+      const data = await loadCloudData();
+      setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
+    } else {
+      const changes = kind === 'paid'
+        ? { paymentStatus: 'paid', paidAt: new Date().toISOString(), paidOn: date }
+        : { paymentStatus: 'pending', paymentDueDate: date, ...(kind === 'request' ? { status: 'Solicitado', sentAt: new Date().toISOString() } : {}) };
+      setClosures((items) => items.map((item) => item.id === closure.id ? { ...item, ...changes } : item));
+      if (kind === 'request') {
+        const ids = new Set(closure.ticketIds || []);
+        setTickets((items) => items.map((item) => ids.has(item.id) ? { ...item, requestStatus: 'Solicitado' } : item));
+      }
     }
-    setClosures((current) => current.map((item) => item.id === closure.id ? { ...item, status: 'Solicitado', sentAt: new Date().toISOString() } : item));
-    const ticketIds = new Set(closure.ticketIds || []);
-    setTickets((current) => current.map((ticket) => ticketIds.has(ticket.id) ? { ...ticket, requestStatus: 'Solicitado' } : ticket));
-    setNotice('Solicitação registrada nesta demonstração; ainda não foi salva na nuvem.');
-    window.setTimeout(() => setNotice(''), 5000);
+    setPaymentAction(null);
+    setNotice(kind === 'paid' ? `Pagamento do fechamento ${closure.number} confirmado.` : kind === 'request' ? `Fechamento ${closure.number}: solicitado por e-mail, aguardando pagamento.` : `Previsão do fechamento ${closure.number} atualizada.`);
+    if (!cloudConfigured) setNotice('Demonstração local: alteração não gravada na nuvem.');
+    window.setTimeout(() => setNotice(''), 7000);
   }
 
   async function saveTicketAdjustment(event, password) {
@@ -832,7 +841,7 @@ export default function App() {
       ticketIds: items.map((item) => item.id),
       ticketDetails: items.map((item) => ({ ...item })),
       driverDetails: driverPaymentDetails(items[0].driver, items, drivers.find((item) => driverKey(item) === key)),
-      status: 'Aguardando envio',
+      status: 'Aguardando envio', paymentStatus: 'pending', paymentDueDate: nextPaymentDate(),
     }));
     const ticketIds = new Set(selectedTickets.map((ticket) => ticket.id));
     setClosureSequence((current) => current + created.length);
@@ -1029,7 +1038,7 @@ export default function App() {
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
               {page === 'fechamentos' && <Closures onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
-              {page === 'solicitacoes' && <Requests closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
+              {page === 'solicitacoes' && <PaymentHistory onSchedule={(closure) => setPaymentAction({ closure, kind: 'schedule' })} onPaid={(closure) => setPaymentAction({ closure, kind: 'paid' })} closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
@@ -1039,6 +1048,7 @@ export default function App() {
             {closureToDelete && <AdminDeleteModal closure={closureToDelete} password={deletePassword} setPassword={setDeletePassword} message={deletePasswordMessage} busy={deleteBusy} onClose={() => { if (!deleteBusy) { setClosureToDelete(null); setDeletePassword(''); setDeletePasswordMessage(''); } }} onConfirm={confirmDeleteClosure} />}
             {driverToUpdate && <DriverActiveModal driver={driverToUpdate} ticketCount={tickets.filter((ticket) => matchesDriver(ticket, driverToUpdate)).length} closureCount={closures.filter((closure) => matchesDriver(closure, driverToUpdate)).length} password={driverActivePassword} setPassword={setDriverActivePassword} message={driverActiveMessage} busy={driverActiveBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverActiveBusy) { setDriverToUpdate(null); setDriverActivePassword(''); setDriverActiveMessage(''); } }} onConfirm={confirmDriverActive} />}
             {ticketToDelete && <TicketDeleteModal ticket={ticketToDelete} password={ticketDeletePassword} setPassword={setTicketDeletePassword} message={ticketDeleteMessage} busy={ticketDeleteBusy} onClose={() => { if (!ticketDeleteBusy) { setTicketToDelete(null); setTicketDeletePassword(''); setTicketDeleteMessage(''); } }} onConfirm={confirmDeleteTicket} />}
+            {paymentAction && <ClosurePaymentModal key={paymentAction.closure.id + paymentAction.kind} action={paymentAction} onClose={() => setPaymentAction(null)} onConfirm={confirmClosurePayment} />}
             {closureToEdit && <ClosureEditorModal key={closureToEdit.id} closure={closureToEdit} tickets={tickets} onClose={() => setClosureToEdit(null)} onSave={saveClosureEdit} />}
           </main>
         </>
@@ -1645,19 +1655,6 @@ function ClosurePreviewModal({ closure, onClose, onDownload }) {
   </div>;
 }
 
-function Requests({ closures, canDelete, onMarkRequested, onPreview, onDownload, onDelete, onEdit }) {
-  const [, refreshTime] = useState(0);
-  useEffect(() => { const timer = window.setInterval(() => refreshTime((value) => value + 1), 1000); return () => window.clearInterval(timer); }, []);
-  const ordered = [...closures].sort((a, b) => (a.status === b.status ? Number(b.number) - Number(a.number) : a.status === 'Aguardando envio' ? -1 : 1));
-  const waiting = ordered.filter((closure) => closure.status === 'Aguardando envio');
-  const sent = ordered.filter((closure) => closure.status === 'Solicitado');
-  return <><PageHeading eyebrow="CONSULTA" title="Histórico" subtitle="Consulte os fechamentos anteriores e acompanhe o status do envio." />
-    <div className="payment-summary"><Metric icon={CreditCard} label="Aguardando envio" value={waiting.length} tint="amber" foot="Fechamentos ainda não solicitados" /><Metric icon={Check} label="Solicitados por e-mail" value={sent.length} tint="green" foot="Mantidos no histórico para evitar duplicidade" /></div>
-    <section className="panel list-panel"><div className="panel-heading"><div><h2>Fechamentos realizados</h2><p>Edição e remoção disponíveis por 2 dias após marcar o e-mail enviado. Depois, o histórico fica disponível para consulta e PDF.</p></div></div>
-      {ordered.length ? <div className="table-wrap"><ResponsiveTable className="closure-history-table"><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>TOTAL</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{ordered.map((item) => <tr key={item.id} className={item.status === 'Solicitado' ? 'closure-requested-row' : undefined}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td><span className={`status-badge ${item.status === 'Solicitado' ? 'solicitado' : 'pendente'}`}><i />{item.status}</span></td><td className="closure-actions"><div className="closure-action-group">{canDelete && <button className="button secondary small-button" disabled={!isWithinClosureChangeWindow(item)} title={!isWithinClosureChangeWindow(item) ? 'Prazo de edição encerrado após 2 dias.' : undefined} onClick={() => onEdit(item)}><Pencil size={14} /> Editar</button>}<button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className={`button ${item.status === 'Aguardando envio' ? 'primary' : 'secondary'} small-button`} onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button>{item.status === 'Aguardando envio' && <button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>}{canDelete && <button className="button delete-button small-button" disabled={!isWithinClosureChangeWindow(item)} title={!isWithinClosureChangeWindow(item) ? 'Prazo de remoção encerrado após 2 dias.' : 'Remover do fechamento: os tickets voltam para aberto.'} onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover</button>}</div></td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-page"><div className="empty-illustration"><CreditCard size={25} /></div><strong>Nenhum fechamento para acompanhar</strong><span>Depois de gerar um fechamento, ele aparecerá aqui.</span></div>}
-    </section>
-  </>;
-}
 function ClosureEditorModal({ closure, tickets, onClose, onSave }) {
   const initialLines = closure.ticketDetails?.length
     ? closure.ticketDetails

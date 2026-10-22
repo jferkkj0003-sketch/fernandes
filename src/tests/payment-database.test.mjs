@@ -1,0 +1,78 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+
+test('payment migration preserves legacy records, enforces real confirmation, and keeps shared pending values', async () => {
+  const db = new PGlite();
+  const actor = '11111111-1111-4111-8111-111111111111';
+  const driver = '22222222-2222-4222-8222-222222222222';
+  const legacy = '33333333-3333-4333-8333-333333333333';
+  const fresh = '44444444-4444-4444-8444-444444444444';
+  const hash = 'a'.repeat(64);
+  try {
+    await db.exec(`
+      create role anon; create role authenticated;
+      create schema auth;
+      create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.actor',true),'')::uuid$$;
+      create function public.is_app_admin() returns boolean language sql as $$select coalesce(current_setting('test.admin',true),'')='yes'$$;
+      create function public.is_app_active_user() returns boolean language sql as $$select auth.uid() is not null$$;
+      grant usage on schema auth to authenticated,anon;
+      grant execute on function auth.uid(),public.is_app_admin(),public.is_app_active_user() to authenticated,anon;
+      create table drivers(id uuid primary key,name text);
+      create table closures(id uuid primary key,number bigint,driver_id uuid references drivers,period_start date,period_end date,ticket_count integer,total numeric,status text,driver_snapshot jsonb,tickets_snapshot jsonb,created_at timestamptz default now(),sent_at timestamptz);
+      create table tickets(id int primary key,driver_id uuid references drivers,date date,weight numeric,gross numeric,discount numeric,status text,closure_id uuid references closures);
+      create table dashboard_share_links(token_hash text,revoked_at timestamptz);
+      create function mark_closure_requested(closure_uuid uuid) returns void language plpgsql security definer set search_path='pg_catalog','public','auth' as $$begin if not public.is_app_active_user() then raise exception 'No access';end if;update closures set status='Solicitado',sent_at=coalesce(sent_at,now()) where id=closure_uuid and status='Aguardando envio';if not found then raise exception 'Not found';end if;end$$;
+      insert into drivers values('${driver}','Motorista teste');
+      insert into closures values('${legacy}',1,'${driver}','2026-10-01','2026-10-22',1,100,'Solicitado','{"name":"Motorista teste","bank":"PRIVATE"}', '[]', now(),now());
+      insert into dashboard_share_links values('${hash}',null);
+    `);
+    const migration = await readFile(new URL('../supabase/migrations/20261022182217_closure_payment_tracking.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration);
+    assert.equal((await db.query('select payment_status from closures where id=$1', [legacy])).rows[0].payment_status, 'unverified');
+    await db.query(`insert into closures(id,number,driver_id,period_start,period_end,ticket_count,total,status,driver_snapshot,tickets_snapshot) values($1,2,$2,'2026-10-01','2026-10-22',2,200,'Aguardando envio','{"name":"Motorista teste","bank":"PRIVATE"}','[]')`, [fresh, driver]);
+    await db.query(`insert into tickets values(1,$1,'2026-10-21',100,100,0,'No fechamento',$2),(2,$1,'2026-10-22',200,100,0,'No fechamento',$2)`, [driver, fresh]);
+    assert.equal((await db.query('select payment_status from closures where id=$1', [fresh])).rows[0].payment_status, 'pending');
+    await db.query(`select set_config('test.actor',$1,false)`, [actor]);
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select mark_closure_paid($1,current_date)', [fresh]), /administrador/);
+    await db.query('select request_closure_payment($1,current_date + 1)', [fresh]);
+    await db.exec('reset role');
+    const requested = (await db.query('select status,payment_status,paid_at from closures where id=$1', [fresh])).rows[0];
+    assert.equal(requested.status, 'Solicitado');
+    assert.equal(requested.payment_status, 'pending');
+    assert.equal(requested.paid_at, null);
+    await db.exec('set role anon');
+    const shared = (await db.query('select get_shared_closure_payments($1) as data', [hash])).rows[0].data;
+    const row = shared.closure_payments.find((c) => c.number === '2');
+    assert.equal(row.email_status, 'Solicitado');
+    assert.equal(row.payment_status, 'pending');
+    assert.equal(row.days.reduce((n, day) => n + day.amount, 0), 200);
+    assert.equal(JSON.stringify(shared).includes('PRIVATE'), false);
+    assert.equal(JSON.stringify(shared).includes(fresh), false);
+    await assert.rejects(db.query('select get_shared_closure_payments($1)', ['b'.repeat(64)]), /Link inválido/);
+    await assert.rejects(db.query('select mark_closure_paid($1,current_date)', [fresh]), /permission denied/);
+    await db.exec('reset role');
+    await db.exec("select set_config('test.admin','yes',false)");
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select mark_closure_paid($1,current_date + 2)', [fresh]), /data efetiva/);
+    await db.query(`select mark_closure_paid($1,(now() at time zone 'America/Manaus')::date)`, [fresh]);
+    await db.query(`select mark_closure_paid($1,(now() at time zone 'America/Manaus')::date)`, [fresh]);
+    await db.exec('reset role');
+    assert.equal((await db.query('select payment_status from closures where id=$1', [fresh])).rows[0].payment_status, 'paid');
+    assert.equal((await db.query("select count(*)::int as n from app_private.closure_payment_events where after_state->>'payment_status'='paid'")).rows[0].n, 1);
+    await assert.rejects(db.query('update closures set total=1 where id=$1', [fresh]), /pago não pode/);
+    await assert.rejects(db.query('delete from closures where id=$1', [fresh]), /pago não pode/);
+    await assert.rejects(db.query('update tickets set status=$1,closure_id=null where id=1', ['Aberto']), /fechamento pago/);
+    await db.exec('set role anon');
+    const paid = (await db.query('select get_shared_closure_payments($1) as data', [hash])).rows[0].data.closure_payments.find((c) => c.number === '2');
+    assert.equal(paid.payment_status, 'paid');
+    assert.ok(paid.paid_on);
+    await db.exec('reset role');
+    await db.query('update dashboard_share_links set revoked_at=now() where token_hash=$1', [hash]);
+    await assert.rejects(db.query('select get_shared_closure_payments($1)', [hash]), /Link inválido/);
+  } finally { await db.close(); }
+});
+

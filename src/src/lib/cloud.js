@@ -71,6 +71,8 @@ const mapClosure = (row) => {
     id: row.id, driverId: row.driver_id || null, number: String(row.number).padStart(3, '0'), driver: driver.fullName || driver.name || '',
     start: row.period_start, end: row.period_end, count: row.ticket_count, total: Number(row.total) || 0,
     status: row.status, createdAt: row.created_at || null, sentAt: row.sent_at || null,
+    paymentStatus: row.payment_status || 'unverified', paymentDueDate: row.payment_due_date || null,
+    paidOn: row.paid_on || null, paidAt: row.paid_at || null,
     ticketIds: ticketDetails.map((ticket) => ticket.id), ticketDetails,
     driverDetails: {
       fullName: driver.fullName || driver.name || '', cpf: driver.cpf || '', plate: driver.plate || '',
@@ -306,6 +308,16 @@ export async function requestCloudClosure(id) {
   if (error) throw error;
 }
 
+export async function saveCloudClosurePayment(id, kind, date) {
+  const operation = kind === 'request' ? 'request_closure_payment' : kind === 'paid' ? 'mark_closure_paid' : 'set_closure_payment_due';
+  const dateKey = kind === 'paid' ? 'paid_on_input' : 'due_date_input';
+  const { error } = await supabase.rpc(operation, { closure_uuid: id, [dateKey]: date });
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') throw new Error('A atualização de pagamentos ainda precisa ser aplicada ao banco compartilhado.');
+    throw error;
+  }
+}
+
 export async function createCloudClosure(driverId, start, end, ticketIds) {
   const { data, error } = await supabase.rpc('create_driver_closure', {
     selected_driver_id: driverId, date_from: start, date_to: end,
@@ -411,15 +423,17 @@ export async function revokeDashboardShare() {
 export async function loadSharedDashboard(token) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
   const tokenHash = Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, '0')).join('');
-  const [dashboardResult, driverResult] = await Promise.all([
+  const [dashboardResult, driverResult, paymentResult] = await Promise.all([
     supabase.rpc('get_shared_dashboard', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_driver_summary', { token_hash_input: tokenHash }),
+    supabase.rpc('get_shared_closure_payments', { token_hash_input: tokenHash }),
   ]);
-  const error = dashboardResult.error || driverResult.error;
+  const error = dashboardResult.error || driverResult.error || paymentResult.error;
   if (error) throw error;
   return {
     ...dashboardResult.data,
     drivers_by_day: driverResult.data?.drivers_by_day || [],
+    closure_payments: paymentResult.data?.closure_payments || [],
   };
 }
 
