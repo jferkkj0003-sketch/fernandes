@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, ClipboardList, CreditCard, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import SharedPayments from './SharedPayments';
+import { requestArchiveAt, requestedSummary } from './lib/request-cycle';
 import { sharedPaymentSummary, operationalSummary } from './lib/shared-payments';
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -45,21 +46,23 @@ export default function SharedDashboard({ token }) {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('all');
-  const [view, setView] = useState('open');
+  const [view, setView] = useState('requested');
+  const [now, setNow] = useState(() => new Date());
   const openOnly = view === 'open';
-  const closedOnly = view === 'closed';
+  const requestedOnly = view === 'requested';
   const [month, setMonth] = useState(() => monthISO(new Date()));
   const [customStart, setCustomStart] = useState(() => dateISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [customEnd, setCustomEnd] = useState(() => dateISO(new Date()));
   const [driverFilter, setDriverFilter] = useState('');
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(silent = false) {
+    if (!silent) setLoading(true);
     setLoadError('');
     try {
       if (!cloudConfigured) throw new Error('O painel não está conectado ao banco de dados.');
       setData(await loadSharedDashboard(token));
     } catch {
+      if (silent) return;
       setLoadError('Este link não existe mais ou foi desativado. Peça ao responsável um novo link.');
       setData(null);
     } finally {
@@ -68,6 +71,20 @@ export default function SharedDashboard({ token }) {
   }
 
   useEffect(() => { refresh(); }, [token]);
+  useEffect(() => {
+    const update = () => { setNow(new Date()); refresh(true); };
+    const visible = () => { if (document.visibilityState === 'visible') update(); };
+    window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', visible);
+    return () => { window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', visible); };
+  }, [token]);
+  useEffect(() => {
+    const timestamp = now.getTime();
+    const deadlines = (data?.closure_payments || []).filter((item) => item.email_status === 'Solicitado').map((item) => requestArchiveAt(item.sent_at)).filter(Boolean).map((date) => new Date(date).getTime()).filter((time) => time > timestamp);
+    const delay = Math.min(30000, ...deadlines.map((time) => time - timestamp));
+    const timer = window.setTimeout(() => setNow(new Date()), Math.max(1, delay));
+    return () => window.clearTimeout(timer);
+  }, [now, data]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('dde-fretes-theme', theme);
@@ -86,13 +103,14 @@ export default function SharedDashboard({ token }) {
     }
     if (range === 'custom') return { start: customStart, end: customEnd };
     return { start: '', end: '' };
-  }, [range, month, customStart, customEnd]);
+  }, [range, month, customStart, customEnd, now.toDateString()]);
 
   const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
   const paymentSummary = useMemo(() => sharedPaymentSummary(data, period, driverFilter), [data, period, driverFilter]);
 
-  const summary = useMemo(() => operationalSummary(data, period, driverFilter, view), [data, period, driverFilter, view]);
+  const requests = useMemo(() => requestedSummary(paymentSummary.closures, now), [paymentSummary, now]);
+  const summary = useMemo(() => requestedOnly ? requests : operationalSummary(data, period, driverFilter, view), [data, period, driverFilter, view, requests, requestedOnly]);
 
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
@@ -101,7 +119,7 @@ export default function SharedDashboard({ token }) {
     <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><span>PAINEL DE ACOMPANHAMENTO</span><h1>Controle de fretes</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
     <nav className="shared-view-tabs" aria-label="Visão do acompanhamento">
       <button className={openOnly ? 'active' : ''} aria-pressed={openOnly} onClick={() => setView('open')}><ClipboardList size={18} /><span>Em aberto<small>Tickets ainda sem fechamento</small></span></button>
-      <button className={closedOnly ? 'active' : ''} aria-pressed={closedOnly} onClick={() => setView('closed')}><CreditCard size={18} /><span>Fechados e solicitados por e-mail<small>Fechamentos e status do envio</small></span></button>
+      <button className={requestedOnly ? 'active' : ''} aria-pressed={requestedOnly} onClick={() => setView('requested')}><CreditCard size={18} /><span>Solicitados por e-mail<small>Solicitações do ciclo atual</small></span></button>
       <button className={view === 'all' ? 'active' : ''} aria-pressed={view === 'all'} onClick={() => setView('all')}><Truck size={18} /><span>Visão geral<small>Todos os tickets do período</small></span></button>
     </nav>
     <section className="shared-toolbar">
@@ -119,24 +137,25 @@ export default function SharedDashboard({ token }) {
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
-        <div className="shared-view-context"><div><h2>{openOnly ? 'Tickets em aberto' : closedOnly ? 'Tickets fechados e solicitações por e-mail' : 'Resumo geral da operação'}</h2><p>{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'}</p></div><span className="shared-view-badge">{openOnly ? 'Somente em aberto' : closedOnly ? 'Somente fechados' : 'Abertos + fechados'}</span></div>
+        <div className="shared-view-context"><div><h2>{openOnly ? 'Tickets em aberto' : requestedOnly ? 'Solicitados por e-mail' : 'Resumo geral da operação'}</h2><p>{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'}</p></div><span className="shared-view-badge">{openOnly ? 'Somente em aberto' : requestedOnly ? 'Sexta-feira · 17h de Manaus' : 'Abertos + fechados'}</span></div>
         {view === 'all' && <p className="shared-overview-open">Dentro deste filtro, ainda estão em aberto: <strong>{money(summary.openAmount)}</strong> em {summary.openCount.toLocaleString('pt-BR')} ticket(s).</p>}
-        <section className="shared-metrics" aria-label={openOnly ? 'Resumo em aberto' : closedOnly ? 'Resumo de tickets fechados' : 'Resumo geral'}>
-          <Metric icon={ClipboardList} label={openOnly ? 'Tickets em aberto' : closedOnly ? 'Tickets fechados' : 'Total de tickets'} value={summary.ticketCount.toLocaleString('pt-BR')} foot={openOnly ? 'Aguardando fechamento' : closedOnly ? 'Inclui os solicitados por e-mail' : 'Abertos e fechados no filtro'} tint="amber" />
-          <Metric icon={Weight} label={openOnly ? 'Peso em aberto' : closedOnly ? 'Peso dos tickets fechados' : 'Peso total transportado'} value={formatWeight(summary.weight)} foot={openOnly ? 'Somente tickets em aberto' : closedOnly ? 'Somente tickets fechados' : 'Todos os tickets do filtro'} tint="violet" />
-          <Metric icon={CreditCard} label={openOnly ? 'Valor em aberto' : closedOnly ? 'Valor dos tickets fechados' : 'Valor líquido total'} value={money(summary.amount)} foot="Valor líquido após descontos" tint="green" />
+        <section className="shared-metrics" aria-label={openOnly ? 'Resumo em aberto' : requestedOnly ? 'Resumo de solicitações por e-mail' : 'Resumo geral'}>
+          <Metric icon={ClipboardList} label={openOnly ? 'Tickets em aberto' : requestedOnly ? 'Tickets solicitados por e-mail' : 'Total de tickets'} value={summary.ticketCount.toLocaleString('pt-BR')} foot={openOnly ? 'Aguardando fechamento' : requestedOnly ? 'Até sexta-feira, às 17h de Manaus' : 'Abertos e fechados no filtro'} tint="amber" />
+          <Metric icon={Weight} label={openOnly ? 'Peso em aberto' : requestedOnly ? 'Peso solicitado' : 'Peso total transportado'} value={formatWeight(summary.weight)} foot={openOnly ? 'Somente tickets em aberto' : requestedOnly ? 'Solicitações do ciclo atual' : 'Todos os tickets do filtro'} tint="violet" />
+          <Metric icon={CreditCard} label={openOnly ? 'Valor em aberto' : requestedOnly ? 'Valor solicitado' : 'Valor líquido total'} value={money(summary.amount)} foot="Valor líquido após descontos" tint="green" />
         </section>
-        {closedOnly && <SharedPayments summary={paymentSummary} />}
-        {!closedOnly && <>
+        {requestedOnly && <SharedPayments closures={requests.closures} requested now={now} />}
+        {!requestedOnly && <>
         <section className="shared-ranking shared-payment-panel">
           <h2>{openOnly ? 'Em aberto por motorista' : 'Resultado por motorista'}</h2>
           <p className="shared-payment-description">{openOnly ? 'Quantidade, peso e valor líquido somente dos tickets em aberto.' : 'Todos os tickets do filtro. O valor total inclui os já fechados.'}</p>
           {summary.ranked.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>MOTORISTA</th><th>{openOnly ? 'TICKETS EM ABERTO' : 'TICKETS'}</th><th>{openOnly ? 'PESO EM ABERTO' : 'PESO TOTAL'}</th><th>{openOnly ? 'VALOR EM ABERTO' : 'VALOR LÍQUIDO'}</th></tr></thead><tbody>{summary.ranked.map((row) => <tr key={row.driver}><td><strong>{row.driver}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td className="shared-payment-amount"><strong>{money(row.amount)}</strong></td></tr>)}</tbody><tfoot><tr><th>{openOnly ? 'TOTAL EM ABERTO' : 'TOTAL GERAL'}</th><td>{summary.ticketCount.toLocaleString('pt-BR')}</td><td>{formatWeight(summary.weight)}</td><td className="shared-payment-amount"><strong>{money(summary.amount)}</strong></td></tr></tfoot></ResponsiveTable></div> : <p className="shared-empty">Nenhum ticket para os filtros selecionados.</p>}
         </section>
         <DriverWeightDonut rows={summary.ranked} openOnly={openOnly} />
+        {view === 'all' && <SharedPayments closures={paymentSummary.closures} now={now} />}
         </>}
       </>}
-    <footer className="shared-footer">Dados atualizados ao abrir ou atualizar este painel · Acesso somente para consulta</footer>
+    <footer className="shared-footer">Ciclo atualizado automaticamente · Dados recarregados ao abrir ou retornar ao painel · Acesso somente para consulta</footer>
   </main>;
 }
 

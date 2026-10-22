@@ -6,3 +6,4 @@ import './downloads.test.mjs';
 import './payments.test.mjs';
 import './payment-database.test.mjs';
 import './shared-payments.test.mjs';
+import './request-cycle.test.mjs';
