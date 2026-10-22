@@ -10,6 +10,7 @@ import {
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
+import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 
@@ -1317,11 +1318,11 @@ function TicketDetailModal({ ticket, onClose, canViewHistory }) {
         {ticket.note && <div className="ticket-detail-note"><span>Observação</span><strong>{ticket.note}</strong></div>}
       </div>
       <div className="ticket-detail-scan">
-        <div className="ticket-detail-scan-heading"><strong>Comprovante escaneado</strong>{scanUrl && <a className="button secondary small-button" href={scanUrl} target="_blank" rel="noreferrer" download={ticket.scanName || `ticket-${ticket.number}`}><ArrowUpRight size={14} /> Abrir em nova aba</a>}</div>
+        <div className="ticket-detail-scan-heading"><strong>Comprovante escaneado</strong>{scanUrl && <a className="button secondary small-button" href={scanUrl} target="_blank" rel="noreferrer"><ArrowUpRight size={14} /> Abrir em nova aba</a>}</div>
         {scanLoading ? <div className="ticket-detail-message">Carregando comprovante…</div>
           : scanError ? <div className="ticket-detail-message error">{scanError}</div>
             : scanUrl ? (isPdf
-              ? <iframe className="ticket-detail-preview pdf" src={scanUrl} title={`Comprovante do ticket ${ticket.number}`} />
+              ? <PdfScanPreview key={scanUrl} url={scanUrl} ticketNumber={ticket.number} />
               : <img className="ticket-detail-preview image" src={scanUrl} alt={`Comprovante escaneado do ticket ${ticket.number}`} />)
               : <div className="ticket-detail-message">Este ticket antigo não tem comprovante anexado.</div>}
       </div>
