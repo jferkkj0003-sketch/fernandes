@@ -262,3 +262,9 @@
     padding: 10px 8px; line-height: 1.35; text-align: center; justify-content: center;
   }
 }
+
+.pdf-scan-preview { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 12px; }
+.pdf-scan-page { display: block; width: auto; height: auto; max-width: 100%; max-height: 68dvh; object-fit: contain; margin: 0 auto; background: white; }
+.pdf-scan-page[hidden] { display: none; }
+.pdf-scan-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; font-size: 12px; color: var(--reading-text); }
+@media (max-width: 520px) { .pdf-scan-preview { padding: 8px; } .pdf-scan-pagination { gap: 6px; font-size: 11px; } .pdf-scan-pagination .button { padding: 8px; } }
