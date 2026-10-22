@@ -188,3 +188,10 @@
   .payment-history-table .status-badge { white-space: normal; line-height: 1.5; }
   .payment-history-table .closure-actions .button { white-space: normal; justify-content: center; }
 }
+.shared-view-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+.shared-view-tabs button { min-width:0; }
+.shared-view-tabs button>svg { flex:none; }
+.shared-email-summary { display:flex; gap:16px; flex-wrap:wrap; margin:22px 0; }
+.shared-email-summary span { padding:14px 18px; border:1px solid var(--line); border-radius:10px; line-height:1.6; }
+.shared-email-summary strong { font-size:20px; margin-right:5px; }
+@media(max-width:650px) { .shared-view-tabs { grid-template-columns:1fr; } .shared-email-summary { flex-direction:column; } }

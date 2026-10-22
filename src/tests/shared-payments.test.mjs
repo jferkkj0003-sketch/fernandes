@@ -26,3 +26,23 @@ test('confirmed paid closures and legacy unknown values remain visible but are n
   assert.equal(summary.closed.unverified, 500);
   assert.equal(summary.closures.length, 2);
 });
+import { operationalSummary } from '../src/lib/shared-payments.js';
+test('operational tabs keep closed and emailed tickets out of open counts', () => {
+  const data = { drivers_by_day: [{ date:'2026-10-22', driver:'A', count:4, weight:1000, amount:3000, open_count:0, open_weight:0, open_amount:0 }], closure_payments:[closure] };
+  const opened = operationalSummary(data);
+  assert.equal(opened.ticketCount,0);
+  assert.equal(opened.amount,0);
+  assert.equal(opened.weight,0);
+  const closed = operationalSummary(data, {}, '', 'closed');
+  assert.equal(closed.ticketCount,4);
+  assert.equal(closed.amount,3000);
+  assert.equal(closed.weight,1000);
+  assert.equal(operationalSummary(data, {}, '', 'all').ticketCount,4);
+  assert.equal(operationalSummary(data, {}, 'B', 'closed').ticketCount,0);
+  assert.equal(operationalSummary(data, {start:'2026-10-23'}, '', 'closed').ticketCount,0);
+});
+test('open plus closed reconciles with overview for mixed driver/day groups', () => {
+  const data={drivers_by_day:[{...open[0],amount:600}]};
+  const opened=operationalSummary(data), closed=operationalSummary(data,{},'','closed'), all=operationalSummary(data,{},'','all');
+  for(const key of ['ticketCount','weight','amount']) assert.equal(opened[key]+closed[key],all[key]);
+});

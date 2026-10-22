@@ -1,4 +1,26 @@
 const numeric = (value) => Number(value) || 0;
+// Closing removes a ticket from open totals independently of payment or email.
+export function operationalSummary(data, period = {}, driver = '', view = 'open') {
+  const rows = (data?.drivers_by_day || []).filter((row) => (!period.start || row.date >= period.start) && (!period.end || row.date <= period.end) && (!driver || row.driver === driver));
+  const ranking = new Map();
+  let openCount = 0, openAmount = 0;
+  for (const row of rows) {
+    const count = numeric(row.count), opened = numeric(row.open_count);
+    const openWeight = row.open_weight != null ? numeric(row.open_weight) : opened === count ? numeric(row.weight) : opened === 0 ? 0 : null;
+    const values = view === 'all' ? { count, weight: numeric(row.weight), amount: numeric(row.amount) }
+      : view === 'closed' ? { count: count - opened, weight: openWeight === null ? null : numeric(row.weight) - openWeight, amount: numeric(row.amount) - numeric(row.open_amount) }
+      : { count: opened, weight: openWeight, amount: numeric(row.open_amount) };
+    openCount += opened; openAmount += numeric(row.open_amount);
+    if (!values.count) continue;
+    const current = ranking.get(row.driver) || { driver: row.driver, count: 0, weight: 0, amount: 0 };
+    current.count += values.count;
+    current.weight = current.weight === null || values.weight === null ? null : current.weight + values.weight;
+    current.amount += values.amount;
+    ranking.set(row.driver, current);
+  }
+  const ranked = [...ranking.values()].sort((a, b) => b.amount - a.amount || a.driver.localeCompare(b.driver, 'pt-BR'));
+  return { ranked, openCount, openAmount, ticketCount: ranked.reduce((sum, row) => sum + row.count, 0), weight: ranked.some((row) => row.weight === null) ? null : ranked.reduce((sum, row) => sum + row.weight, 0), amount: ranked.reduce((sum, row) => sum + row.amount, 0) };
+}
 export function sharedPaymentSummary(data, period = {}, driver = '') {
   const matches = (day) => (!period.start || day >= period.start) && (!period.end || day <= period.end);
   const openRows = (data?.drivers_by_day || []).filter((row) => matches(row.date) && (!driver || row.driver === driver));
