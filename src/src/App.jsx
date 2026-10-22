@@ -13,6 +13,8 @@ import ResponsiveTable from './ResponsiveTable';
 import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
+import DownloadPreferences from './DownloadPreferences';
+import { downloadPreferences } from './lib/downloads';
 
 const initialTickets = [
   { id: 'T-1464', dateISO: '2026-10-17', date: '17/10/2026', number: '1464', driver: 'Motorista 01', plate: 'QZV-2H16', weight: 150, gross: 150, discount: 0, note: '', status: 'Aberto' },
@@ -220,21 +222,19 @@ function pdfFilename(closure) {
   return `${id} - ${name || 'Motorista'}.pdf`;
 }
 
-function downloadClosurePdf(closure, setNotice, setCloudBusy) {
-  const link = document.createElement('a');
-  link.download = pdfFilename(closure);
+async function downloadClosurePdf(closure, setNotice, setCloudBusy) {
   setNotice('Preparando o relatório e os comprovantes…');
   setCloudBusy(true);
-  buildClosurePdf(closure).then((blob) => {
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-    setNotice(`PDF do fechamento ${closure.number} pronto para baixar.`);
-  }).catch((error) => setNotice(`Não foi possível montar o PDF: ${error.message || 'verifique os escaneamentos e tente novamente.'}`))
-    .finally(() => { setCloudBusy(false); window.setTimeout(() => setNotice(''), 6000); });
+  try {
+    const directory = await downloadPreferences.prepare();
+    const blob = await buildClosurePdf(closure);
+    const result = await downloadPreferences.save(blob, pdfFilename(closure), directory);
+    setNotice(result.mode === 'folder'
+      ? `PDF salvo na pasta ${result.folder}: ${result.filename}`
+      : `PDF do fechamento ${closure.number} pronto para baixar.`);
+  } catch (error) {
+    setNotice(`Não foi possível salvar o PDF: ${error.message || 'verifique os escaneamentos e tente novamente.'}`);
+  } finally { setCloudBusy(false); window.setTimeout(() => setNotice(''), 10000); }
 }
 
 function openClosurePdf(closure, setNotice, setCloudBusy) {
@@ -1540,6 +1540,7 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
         {message && <p className="account-message" role="status">{message}</p>}
         <div className="form-actions"><button className="button secondary" type="button" onClick={onClose}>Fechar</button><button className="button primary" type="submit" disabled={busy}><Check size={16} /> {busy ? 'Salvando…' : 'Salvar alterações'}</button></div>
       </form>
+      <DownloadPreferences />
       <DashboardShareManager isAdmin={isAdmin} />
       <OperatorAccessManager isAdmin={isAdmin} />
     </section>
