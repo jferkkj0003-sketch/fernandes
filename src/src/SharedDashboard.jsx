@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, ClipboardList, CreditCard, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import SharedPayments from './SharedPayments';
+import OverviewCharts from './OverviewCharts';
 import { requestArchiveAt, requestedSummary } from './lib/request-cycle';
 import { sharedPaymentSummary, operationalSummary } from './lib/shared-payments';
 
@@ -120,7 +121,7 @@ export default function SharedDashboard({ token }) {
     <nav className="shared-view-tabs" aria-label="Visão do acompanhamento">
       <button className={openOnly ? 'active' : ''} aria-pressed={openOnly} onClick={() => setView('open')}><ClipboardList size={18} /><span>Em aberto<small>Tickets ainda sem fechamento</small></span></button>
       <button className={requestedOnly ? 'active' : ''} aria-pressed={requestedOnly} onClick={() => setView('requested')}><CreditCard size={18} /><span>Solicitados por e-mail<small>Solicitações do ciclo atual</small></span></button>
-      <button className={view === 'all' ? 'active' : ''} aria-pressed={view === 'all'} onClick={() => setView('all')}><Truck size={18} /><span>Visão geral<small>Todos os tickets do período</small></span></button>
+      <button className={view === 'all' ? 'active' : ''} aria-pressed={view === 'all'} onClick={() => setView('all')}><Truck size={18} /><span>Visão geral<small>Painel de peso e valor</small></span></button>
     </nav>
     <section className="shared-toolbar">
       <div className="shared-range-tabs" aria-label="Filtrar período">
@@ -138,22 +139,21 @@ export default function SharedDashboard({ token }) {
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
         <div className="shared-view-context"><div><h2>{openOnly ? 'Tickets em aberto' : requestedOnly ? 'Solicitados por e-mail' : 'Resumo geral da operação'}</h2><p>{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'}</p></div><span className="shared-view-badge">{openOnly ? 'Somente em aberto' : requestedOnly ? 'Sexta-feira · 17h de Manaus' : 'Abertos + fechados'}</span></div>
-        {view === 'all' && <p className="shared-overview-open">Dentro deste filtro, ainda estão em aberto: <strong>{money(summary.openAmount)}</strong> em {summary.openCount.toLocaleString('pt-BR')} ticket(s).</p>}
-        <section className="shared-metrics" aria-label={openOnly ? 'Resumo em aberto' : requestedOnly ? 'Resumo de solicitações por e-mail' : 'Resumo geral'}>
-          <Metric icon={ClipboardList} label={openOnly ? 'Tickets em aberto' : requestedOnly ? 'Tickets solicitados por e-mail' : 'Total de tickets'} value={summary.ticketCount.toLocaleString('pt-BR')} foot={openOnly ? 'Aguardando fechamento' : requestedOnly ? 'Até sexta-feira, às 17h de Manaus' : 'Abertos e fechados no filtro'} tint="amber" />
-          <Metric icon={Weight} label={openOnly ? 'Peso em aberto' : requestedOnly ? 'Peso solicitado' : 'Peso total transportado'} value={formatWeight(summary.weight)} foot={openOnly ? 'Somente tickets em aberto' : requestedOnly ? 'Solicitações do ciclo atual' : 'Todos os tickets do filtro'} tint="violet" />
+        <section className={`shared-metrics ${view === 'all' ? 'overview-metrics' : ''}`} aria-label={openOnly ? 'Resumo em aberto' : requestedOnly ? 'Resumo de solicitações por e-mail' : 'Resumo geral'}>
+          {view !== 'all' && <Metric icon={ClipboardList} label={openOnly ? 'Tickets em aberto' : requestedOnly ? 'Tickets solicitados por e-mail' : 'Total de tickets'} value={summary.ticketCount.toLocaleString('pt-BR')} foot={openOnly ? 'Aguardando fechamento' : requestedOnly ? 'Até sexta-feira, às 17h de Manaus' : 'Abertos e fechados no filtro'} tint="amber" />}
+          <Metric icon={Weight} label={openOnly ? 'Peso em aberto' : requestedOnly ? 'Peso solicitado' : 'Peso total transportado'} value={formatWeight(summary.weight)} foot={openOnly ? 'Somente tickets em aberto' : requestedOnly ? 'Solicitações do ciclo atual' : 'Total transportado no período'} tint="violet" />
           <Metric icon={CreditCard} label={openOnly ? 'Valor em aberto' : requestedOnly ? 'Valor solicitado' : 'Valor líquido total'} value={money(summary.amount)} foot="Valor líquido após descontos" tint="green" />
         </section>
         {requestedOnly && <SharedPayments closures={requests.closures} requested now={now} />}
-        {!requestedOnly && <>
+        {openOnly && <>
         <section className="shared-ranking shared-payment-panel">
           <h2>{openOnly ? 'Em aberto por motorista' : 'Resultado por motorista'}</h2>
           <p className="shared-payment-description">{openOnly ? 'Quantidade, peso e valor líquido somente dos tickets em aberto.' : 'Todos os tickets do filtro. O valor total inclui os já fechados.'}</p>
           {summary.ranked.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>MOTORISTA</th><th>{openOnly ? 'TICKETS EM ABERTO' : 'TICKETS'}</th><th>{openOnly ? 'PESO EM ABERTO' : 'PESO TOTAL'}</th><th>{openOnly ? 'VALOR EM ABERTO' : 'VALOR LÍQUIDO'}</th></tr></thead><tbody>{summary.ranked.map((row) => <tr key={row.driver}><td><strong>{row.driver}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td className="shared-payment-amount"><strong>{money(row.amount)}</strong></td></tr>)}</tbody><tfoot><tr><th>{openOnly ? 'TOTAL EM ABERTO' : 'TOTAL GERAL'}</th><td>{summary.ticketCount.toLocaleString('pt-BR')}</td><td>{formatWeight(summary.weight)}</td><td className="shared-payment-amount"><strong>{money(summary.amount)}</strong></td></tr></tfoot></ResponsiveTable></div> : <p className="shared-empty">Nenhum ticket para os filtros selecionados.</p>}
         </section>
         <DriverWeightDonut rows={summary.ranked} openOnly={openOnly} />
-        {view === 'all' && <SharedPayments closures={paymentSummary.closures} now={now} />}
         </>}
+        {view === 'all' && <OverviewCharts rows={summary.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />}
       </>}
     <footer className="shared-footer">Ciclo atualizado automaticamente · Dados recarregados ao abrir ou retornar ao painel · Acesso somente para consulta</footer>
   </main>;
