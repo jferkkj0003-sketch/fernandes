@@ -219,3 +219,18 @@
 :root[data-theme="dark"] .overview-donut>div{background:#172332}
 @media(max-width:800px){.overview-charts-grid{grid-template-columns:1fr}.overview-chart-card{padding:20px}.overview-metrics{grid-template-columns:1fr 1fr}}
 @media(max-width:500px){.overview-metrics{grid-template-columns:1fr}.overview-legend-row{font-size:12px}.overview-chart-total strong{font-size:18px}}
+.consultation-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:22px 0 0}
+.consultation-card{min-width:0;padding:22px;display:flex;flex-direction:column;gap:0}
+.consultation-card-heading{display:flex;gap:10px;align-items:center;min-height:42px}
+.consultation-card-heading h2{font-size:15px;line-height:1.4;margin:0}
+.consultation-card-heading .shared-metric-icon{margin:0;flex:none}
+.consultation-card>p{font-size:12px;line-height:1.5;color:var(--muted);margin:14px 0 12px;min-height:36px}
+.consultation-card>strong{font-size:clamp(22px,2.1vw,30px);line-height:1.4;overflow-wrap:anywhere}
+.consultation-card-weight{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:14px;margin-top:18px;font-size:13px}
+.consultation-card-weight>span{color:var(--muted)}
+.consultation-card-weight>b{text-align:right;font-size:16px}
+.consultation-card .shared-metric-icon.blue{background:#eaf1ff;color:#3478ea}
+.consultation-cycle-note{font-size:12px;color:var(--muted);line-height:1.7;margin:16px 0 24px}
+:root[data-theme="dark"] .consultation-card .shared-metric-icon.blue{background:#203b5d;color:#9cc3ff}
+@media(max-width:1150px){.consultation-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.consultation-card>strong{font-size:28px}}
+@media(max-width:520px){.consultation-summary{grid-template-columns:1fr}.consultation-card>p{min-height:0}.consultation-card{padding:20px}}

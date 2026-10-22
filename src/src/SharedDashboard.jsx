@@ -1,44 +1,21 @@
-import ResponsiveTable from './ResponsiveTable';
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, ClipboardList, CreditCard, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
+import { AlertCircle, CalendarDays, ClipboardList, CreditCard, Mail, FolderCheck, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
-import SharedPayments from './SharedPayments';
 import OverviewCharts from './OverviewCharts';
-import { requestArchiveAt, requestedSummary } from './lib/request-cycle';
-import { sharedPaymentSummary, operationalSummary } from './lib/shared-payments';
+import { requestArchiveAt } from './lib/request-cycle';
+import { consultationSummary } from './lib/consultation';
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const dateISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const monthISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const formatWeight = (value) => value === null ? 'Peso indisponível' : `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg`;
 
-function Metric({ icon: Icon, label, value, foot, tint }) {
-  return <article className="shared-metric">
-    <span className={`shared-metric-icon ${tint}`}><Icon size={18} /></span>
-    <span className="shared-metric-label">{label}</span>
-    <strong>{value}</strong>
-    <small>{foot}</small>
+function SummaryCard({ icon: Icon, title, description, values, tint }) {
+  return <article className={`shared-metric consultation-card ${tint}`}>
+    <div className="consultation-card-heading"><span className={`shared-metric-icon ${tint}`}><Icon size={18} /></span><h2>{title}</h2></div>
+    <p>{description}</p><strong>{money(values.amount)}</strong>
+    <div className="consultation-card-weight"><span>Peso</span><b>{formatWeight(values.weight)}</b></div>
   </article>;
-}
-
-function DriverWeightDonut({ rows, openOnly }) {
-  const weighted = [...rows].filter((row) => row.weight > 0).sort((a, b) => b.weight - a.weight);
-  const total = weighted.reduce((sum, row) => sum + row.weight, 0);
-  const colors = ['#3478ea', '#2a9b72', '#e5a631', '#8b6bd6', '#e16c55', '#28a6b5', '#ce6ba5', '#8291a5'];
-  let position = 0;
-  const gradient = weighted.map((row, index) => {
-    const start = position;
-    position += row.weight / total * 100;
-    return `${colors[index % colors.length]} ${start}% ${position}%`;
-  }).join(', ');
-  return <section className="shared-ranking shared-weight-panel">
-    <h2>{openOnly ? 'Peso em aberto por motorista' : 'Peso total por motorista'}</h2>
-    <p className="shared-payment-description">{openOnly ? 'Peso somente dos tickets que ainda estão abertos.' : 'Peso de todos os tickets do período.'}</p>
-    {rows.some((row) => row.weight === null) ? <p className="shared-empty">Peso em aberto indisponível para este filtro.</p> : total > 0 ? <div className="shared-weight-layout">
-      <div className="shared-weight-donut" role="img" aria-label={`Peso total: ${formatWeight(total)}. ${weighted.map((row) => `${row.driver}: ${formatWeight(row.weight)}`).join('; ')}`} style={{ background: `conic-gradient(${gradient})` }}><div><strong>{formatWeight(total)}</strong><span>Peso total</span></div></div>
-      <div className="shared-weight-legend">{weighted.map((row, index) => <div className="shared-weight-item" key={row.driver}><span className="shared-weight-swatch" style={{ background: colors[index % colors.length] }} /><strong>{row.driver}</strong><div><b>{formatWeight(row.weight)}</b><small>{(row.weight / total * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</small></div></div>)}</div>
-    </div> : <p className="shared-empty">Nenhum peso registrado para os filtros selecionados.</p>}
-  </section>;
 }
 
 export default function SharedDashboard({ token }) {
@@ -47,10 +24,7 @@ export default function SharedDashboard({ token }) {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('all');
-  const [view, setView] = useState('requested');
   const [now, setNow] = useState(() => new Date());
-  const openOnly = view === 'open';
-  const requestedOnly = view === 'requested';
   const [month, setMonth] = useState(() => monthISO(new Date()));
   const [customStart, setCustomStart] = useState(() => dateISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [customEnd, setCustomEnd] = useState(() => dateISO(new Date()));
@@ -108,21 +82,13 @@ export default function SharedDashboard({ token }) {
 
   const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
-  const paymentSummary = useMemo(() => sharedPaymentSummary(data, period, driverFilter), [data, period, driverFilter]);
-
-  const requests = useMemo(() => requestedSummary(paymentSummary.closures, now), [paymentSummary, now]);
-  const summary = useMemo(() => requestedOnly ? requests : operationalSummary(data, period, driverFilter, view), [data, period, driverFilter, view, requests, requestedOnly]);
+  const summary = useMemo(() => consultationSummary(data, period, driverFilter, now), [data, period, driverFilter, now]);
 
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
 
   return <main className="shared-dashboard">
     <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><span>PAINEL DE ACOMPANHAMENTO</span><h1>Controle de fretes</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
-    <nav className="shared-view-tabs" aria-label="Visão do acompanhamento">
-      <button className={openOnly ? 'active' : ''} aria-pressed={openOnly} onClick={() => setView('open')}><ClipboardList size={18} /><span>Em aberto<small>Tickets ainda sem fechamento</small></span></button>
-      <button className={requestedOnly ? 'active' : ''} aria-pressed={requestedOnly} onClick={() => setView('requested')}><CreditCard size={18} /><span>Solicitados por e-mail<small>Solicitações do ciclo atual</small></span></button>
-      <button className={view === 'all' ? 'active' : ''} aria-pressed={view === 'all'} onClick={() => setView('all')}><Truck size={18} /><span>Visão geral<small>Painel de peso e valor</small></span></button>
-    </nav>
     <section className="shared-toolbar">
       <div className="shared-range-tabs" aria-label="Filtrar período">
         <button className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>Últimos 7 dias</button>
@@ -138,22 +104,15 @@ export default function SharedDashboard({ token }) {
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
-        <div className="shared-view-context"><div><h2>{openOnly ? 'Tickets em aberto' : requestedOnly ? 'Solicitados por e-mail' : 'Resumo geral da operação'}</h2><p>{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'}</p></div><span className="shared-view-badge">{openOnly ? 'Somente em aberto' : requestedOnly ? 'Sexta-feira · 17h de Manaus' : 'Abertos + fechados'}</span></div>
-        <section className={`shared-metrics ${view === 'all' ? 'overview-metrics' : ''}`} aria-label={openOnly ? 'Resumo em aberto' : requestedOnly ? 'Resumo de solicitações por e-mail' : 'Resumo geral'}>
-          {view !== 'all' && <Metric icon={ClipboardList} label={openOnly ? 'Tickets em aberto' : requestedOnly ? 'Tickets solicitados por e-mail' : 'Total de tickets'} value={summary.ticketCount.toLocaleString('pt-BR')} foot={openOnly ? 'Aguardando fechamento' : requestedOnly ? 'Até sexta-feira, às 17h de Manaus' : 'Abertos e fechados no filtro'} tint="amber" />}
-          <Metric icon={Weight} label={openOnly ? 'Peso em aberto' : requestedOnly ? 'Peso solicitado' : 'Peso total transportado'} value={formatWeight(summary.weight)} foot={openOnly ? 'Somente tickets em aberto' : requestedOnly ? 'Solicitações do ciclo atual' : 'Total transportado no período'} tint="violet" />
-          <Metric icon={CreditCard} label={openOnly ? 'Valor em aberto' : requestedOnly ? 'Valor solicitado' : 'Valor líquido total'} value={money(summary.amount)} foot="Valor líquido após descontos" tint="green" />
+        <div className="shared-view-context"><div><h2>Resumo da operação</h2><p>{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'}</p></div><span className="shared-view-badge">Somente consulta</span></div>
+        <section className="consultation-summary" aria-label="Resumo da operação por situação">
+          <SummaryCard icon={ClipboardList} title="Em aberto" description="Ainda sem fechamento" values={summary.open} tint="amber" />
+          <SummaryCard icon={FolderCheck} title="Fechados" description="Aguardando envio por e-mail" values={summary.waiting} tint="violet" />
+          <SummaryCard icon={Mail} title="Solicitados por e-mail" description="Ciclo atual · até sexta às 17h de Manaus" values={summary.requested} tint="blue" />
+          <SummaryCard icon={CreditCard} title="Total geral" description="Todo o movimento do período, incluindo o histórico" values={summary.total} tint="green" />
         </section>
-        {requestedOnly && <SharedPayments closures={requests.closures} requested now={now} />}
-        {openOnly && <>
-        <section className="shared-ranking shared-payment-panel">
-          <h2>{openOnly ? 'Em aberto por motorista' : 'Resultado por motorista'}</h2>
-          <p className="shared-payment-description">{openOnly ? 'Quantidade, peso e valor líquido somente dos tickets em aberto.' : 'Todos os tickets do filtro. O valor total inclui os já fechados.'}</p>
-          {summary.ranked.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>MOTORISTA</th><th>{openOnly ? 'TICKETS EM ABERTO' : 'TICKETS'}</th><th>{openOnly ? 'PESO EM ABERTO' : 'PESO TOTAL'}</th><th>{openOnly ? 'VALOR EM ABERTO' : 'VALOR LÍQUIDO'}</th></tr></thead><tbody>{summary.ranked.map((row) => <tr key={row.driver}><td><strong>{row.driver}</strong></td><td>{row.count.toLocaleString('pt-BR')}</td><td>{formatWeight(row.weight)}</td><td className="shared-payment-amount"><strong>{money(row.amount)}</strong></td></tr>)}</tbody><tfoot><tr><th>{openOnly ? 'TOTAL EM ABERTO' : 'TOTAL GERAL'}</th><td>{summary.ticketCount.toLocaleString('pt-BR')}</td><td>{formatWeight(summary.weight)}</td><td className="shared-payment-amount"><strong>{money(summary.amount)}</strong></td></tr></tfoot></ResponsiveTable></div> : <p className="shared-empty">Nenhum ticket para os filtros selecionados.</p>}
-        </section>
-        <DriverWeightDonut rows={summary.ranked} openOnly={openOnly} />
-        </>}
-        {view === 'all' && <OverviewCharts rows={summary.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />}
+        <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral. Os gráficos abaixo mostram o movimento total dos filtros selecionados.</p>
+        <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
       </>}
     <footer className="shared-footer">Ciclo atualizado automaticamente · Dados recarregados ao abrir ou retornar ao painel · Acesso somente para consulta</footer>
   </main>;
