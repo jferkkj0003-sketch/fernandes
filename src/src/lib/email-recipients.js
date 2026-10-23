@@ -1,5 +1,5 @@
 export function parseRecipients(value) {
-  const addresses = String(value || '').split(/[;,\r\n]+/).map((item) => item.trim()).filter(Boolean);
+  const addresses = String(value || '').split(/[;,\r\n]+/).map((item) => item.trim().replace(/^['"]+|['"]+$/g, '').trim()).filter(Boolean);
   const invalid = addresses.find((address) => !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(address));
   if (invalid) throw new Error(`Confira este endereço de e-mail: ${invalid}`);
   return [...new Map(addresses.map((address) => [address.toLowerCase(), address])).values()];

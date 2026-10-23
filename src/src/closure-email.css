@@ -8,3 +8,11 @@
 .closure-email-fields textarea{resize:vertical;min-height:100px;width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;font-family:inherit;font-size:14px;line-height:1.6}
 .closure-email-fields textarea:focus-visible{outline:3px solid #a9c7ff;outline-offset:2px}
 @media(max-width:650px){.closure-email-fields{grid-template-columns:1fr}.closure-email-fields textarea{font-size:16px}.closure-email-preferences{padding:16px}}
+
+.closure-outlook-modal{width:min(100%,780px);max-height:92dvh;overflow-y:auto}
+.outlook-field{display:flex;flex-direction:column;gap:8px;font-size:13px;font-weight:600;color:var(--reading-text,var(--muted));margin-top:16px}
+.outlook-field input,.outlook-field textarea{width:100%;font:inherit;line-height:1.6;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:inherit;background:var(--surface)}
+.outlook-field textarea{resize:vertical;min-height:170px}
+.outlook-steps{font-size:13px;line-height:1.7;padding-left:20px;color:var(--muted)}
+.outlook-confirm{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+@media(max-width:650px){.closure-outlook-modal{padding:18px}.outlook-field input,.outlook-field textarea{font-size:16px}.closure-outlook-modal .form-actions{flex-wrap:wrap}}

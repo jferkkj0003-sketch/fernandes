@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Weight, CreditCard, ClipboardList, Check, FileText, ArrowDownToLine, Pencil, RefreshCw } from 'lucide-react';
+import { Mail, Search, Weight, CreditCard, ClipboardList, Check, FileText, ArrowDownToLine, Pencil, RefreshCw } from 'lucide-react';
 import ResponsiveTable from './ResponsiveTable';
 import { searchHistory } from './lib/history-search';
 import { driverOptions } from './lib/drivers';
@@ -47,7 +47,7 @@ export default function History({ closures, drivers, tickets, canDelete, onMarkR
             {canDelete&&<button className="button secondary small-button" disabled={!isWithinClosureChangeWindow(item)} onClick={()=>onEdit(item)}><Pencil size={14}/> Editar</button>}
             <button className="button secondary small-button" title="Abrir o fechamento completo" onClick={()=>onPreview(item)}><FileText size={14}/> Abrir PDF</button>
             <button className={`button ${item.status==='Aguardando envio'?'primary':'secondary'} small-button`} title="Baixar o fechamento completo" onClick={()=>onDownload(item)}><ArrowDownToLine size={14}/> Baixar PDF</button>
-            {item.status==='Aguardando envio'&&<button className="button secondary small-button" onClick={()=>onMarkRequested(item)}><Check size={14}/> Marcar e-mail enviado</button>}
+            {item.status==='Aguardando envio'&&<button className="button secondary small-button" onClick={()=>onMarkRequested(item)}><Mail size={14}/> Enviar no e-mail</button>}
             {canDelete&&<button className="button delete-button small-button" disabled={!isWithinClosureChangeWindow(item)} onClick={()=>onDelete(item)}><RefreshCw size={14}/> Remover</button>}
           </div></td>
         </tr>;

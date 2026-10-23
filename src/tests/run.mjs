@@ -12,3 +12,4 @@ import './consultation.test.mjs';
 import './history-search.test.mjs';
 
 import './dashboard-summary.test.mjs';
+import './outlook-package.test.mjs';

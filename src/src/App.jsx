@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownToLine, ArrowUpRight, BadgeDollarSign, Bell, Check, ChevronDown,
   CircleHelp, ClipboardList, CreditCard, Eye, LayoutDashboard, Menu, Plus, Pencil,
-  Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
+  Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import {
   clearCloudTicketScanCache, cloudConfigured, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, setCloudDriverActive, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
@@ -16,6 +16,8 @@ import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 import DownloadPreferences from './DownloadPreferences';
 import ClosureEmailPreferences from './ClosureEmailPreferences';
+import ClosureOutlookModal from './ClosureOutlookModal';
+import { buildOutlookPackage } from './lib/outlook-package';
 import History from './History';
 import { downloadPreferences } from './lib/downloads';
 
@@ -287,6 +289,7 @@ export default function App() {
   const [editingTicket, setEditingTicket] = useState(null);
   const [viewingTicket, setViewingTicket] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [closureToEmail, setClosureToEmail] = useState(null);
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountMessage, setAccountMessage] = useState('');
   const [closureToDelete, setClosureToDelete] = useState(null);
@@ -523,6 +526,17 @@ export default function App() {
     setPage('tickets');
   }
 
+  async function prepareClosureEmail(closure, message) {
+    const directory = await downloadPreferences.prepare();
+    const pdf = await buildClosurePdf(closure);
+    const archive = await buildOutlookPackage({ pdf, filename: pdfFilename(closure), ...message });
+    const name = `Fechamento-${String(closure.number).replace(/[^a-zA-Z0-9-]/g, '')}-Outlook.zip`;
+    const saved = await downloadPreferences.save(archive, name, directory);
+    return saved.mode === 'folder'
+      ? `ZIP salvo na pasta ${saved.folder}: ${saved.filename}. Extraia todos os arquivos e abra Abrir_no_Outlook.vbs.`
+      : 'Download do ZIP iniciado. Extraia todos os arquivos e abra Abrir_no_Outlook.vbs para preparar a mensagem.';
+  }
+
   async function markClosureRequested(closure) {
     if (closure.status !== 'Aguardando envio') return;
     if (!window.confirm(`Você já enviou por e-mail o fechamento ${closure.number} de ${closure.driver}?`)) return;
@@ -533,16 +547,17 @@ export default function App() {
         const data = await loadCloudData();
         setDrivers(data.drivers); setTickets(data.tickets); setClosures(data.closures);
         setNotice(`Fechamento ${closure.number} marcado como solicitado por e-mail.`);
-      } catch (error) { setNotice(`Não foi possível atualizar a solicitação: ${error.message || 'tente novamente'}`); }
+        window.setTimeout(() => setNotice(''), 5000);
+        return true;
+      } catch (error) { setNotice(`Não foi possível atualizar a solicitação: ${error.message || 'tente novamente'}`); return false; }
       finally { setCloudBusy(false); }
-      window.setTimeout(() => setNotice(''), 5000);
-      return;
     }
     setClosures((current) => current.map((item) => item.id === closure.id ? { ...item, status: 'Solicitado', sentAt: new Date().toISOString() } : item));
     const ticketIds = new Set(closure.ticketIds || []);
     setTickets((current) => current.map((ticket) => ticketIds.has(ticket.id) ? { ...ticket, requestStatus: 'Solicitado' } : ticket));
     setNotice('Solicitação registrada nesta demonstração; ainda não foi salva na nuvem.');
     window.setTimeout(() => setNotice(''), 5000);
+    return true;
   }
 
   async function saveTicketAdjustment(event, password) {
@@ -1025,13 +1040,14 @@ export default function App() {
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
-              {page === 'fechamentos' && <Closures user={sessionUser} onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
-              {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
+              {page === 'fechamentos' && <Closures user={sessionUser} onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={setClosureToEmail} onDelete={deleteClosure} />}
+              {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onMarkRequested={setClosureToEmail} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
+            {closureToEmail && <ClosureOutlookModal key={closureToEmail.id} closure={closureToEmail} user={sessionUser} onClose={() => setClosureToEmail(null)} onPrepare={prepareClosureEmail} onConfirmSent={markClosureRequested} />}
             {accountOpen && <AccountModal user={sessionUser} onClose={() => setAccountOpen(false)} onSave={saveAccount} busy={accountBusy} message={accountMessage} isAdmin={isAdmin} />}
             {closureToDelete && <AdminDeleteModal closure={closureToDelete} password={deletePassword} setPassword={setDeletePassword} message={deletePasswordMessage} busy={deleteBusy} onClose={() => { if (!deleteBusy) { setClosureToDelete(null); setDeletePassword(''); setDeletePasswordMessage(''); } }} onConfirm={confirmDeleteClosure} />}
             {driverToUpdate && <DriverActiveModal driver={driverToUpdate} ticketCount={tickets.filter((ticket) => matchesDriver(ticket, driverToUpdate)).length} closureCount={closures.filter((closure) => matchesDriver(closure, driverToUpdate)).length} password={driverActivePassword} setPassword={setDriverActivePassword} message={driverActiveMessage} busy={driverActiveBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverActiveBusy) { setDriverToUpdate(null); setDriverActivePassword(''); setDriverActiveMessage(''); } }} onConfirm={confirmDriverActive} />}
@@ -1565,7 +1581,7 @@ function Closures({ user, onView, tickets, drivers: driverRecords, closures, can
       </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket aberto encontrado nesse período. Os resultados mudam automaticamente ao alterar os filtros.</span></div>}
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
-      {pendingClosures.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar e-mail enviado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
+      {pendingClosures.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onMarkRequested(item)}><Mail size={14} /> Enviar no e-mail</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
     </section>
   </>;
 }
