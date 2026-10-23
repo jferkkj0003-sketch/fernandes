@@ -295,8 +295,15 @@
 }
 @media (max-width: 800px) {
   .app-frame.navigation-open .main-area { margin-left: 0; }
-  .sidebar { width: min(300px, 86vw); z-index: 6; }
-  .sidebar.sidebar-open { box-shadow: 10px 0 30px #10203030; }
+  .sidebar {
+    position: relative; inset: auto; display: none; width: 100%; height: auto;
+    transform: none; overflow: visible; border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  .sidebar.sidebar-open { display: flex; box-shadow: none; }
+  .sidebar .brand-row { padding-bottom: 12px; }
+  .sidebar .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sidebar .sidebar-spacer, .sidebar .sidebar-help { display: none; }
+  .sidebar .profile-row { margin-top: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sidebar, .main-area { transition: none; }
