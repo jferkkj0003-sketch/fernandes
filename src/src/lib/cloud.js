@@ -103,6 +103,16 @@ export async function getSession() {
   return supabase.auth.getSession();
 }
 
+export async function saveClosureEmailRecipients(recipients) {
+  const { data, error } = await supabase.auth.updateUser({ data: { closure_email_recipients: recipients } });
+  if (error) throw error;
+  const confirmed = data.user?.user_metadata?.closure_email_recipients;
+  if (!confirmed || JSON.stringify(confirmed.to) !== JSON.stringify(recipients.to) || JSON.stringify(confirmed.cc) !== JSON.stringify(recipients.cc)) {
+    throw new Error('O servidor não confirmou os destinatários. Tente salvar novamente.');
+  }
+  return confirmed;
+}
+
 export function onAuthChange(callback) {
   return supabase.auth.onAuthStateChange((_event, session) => callback(session));
 }

@@ -15,6 +15,7 @@ import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 import DownloadPreferences from './DownloadPreferences';
+import ClosureEmailPreferences from './ClosureEmailPreferences';
 import History from './History';
 import { downloadPreferences } from './lib/downloads';
 
@@ -1024,7 +1025,7 @@ export default function App() {
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
-              {page === 'fechamentos' && <Closures onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
+              {page === 'fechamentos' && <Closures user={sessionUser} onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
               {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
@@ -1528,7 +1529,7 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
   </div>;
 }
 
-function Closures({ onView, tickets, drivers: driverRecords, closures, canDelete, onGenerate, onPreview, onDownload, onMarkRequested, onDelete }) {
+function Closures({ user, onView, tickets, drivers: driverRecords, closures, canDelete, onGenerate, onPreview, onDownload, onMarkRequested, onDelete }) {
   const [generating, setGenerating] = useState(false);
   const [driver, setDriver] = useState('');
   const [start, setStart] = useState(() => localDaysAgo(5));
@@ -1552,6 +1553,7 @@ function Closures({ onView, tickets, drivers: driverRecords, closures, canDelete
   };
 
   return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Gere um fechamento por motorista e período." action={<button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Plus size={17} /> {generating ? 'Gerando…' : `Gerar fechamento${selectedMatches.length ? ` (${selectedMatches.length})` : ''}`}</button>} />
+    <ClosureEmailPreferences user={user} />
     <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista e o período. Cada fechamento é individual.</p></div></div>
       <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label><label>Data inicial<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>Data final<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>Selecione um motorista para ver os tickets disponíveis para fechar.</span></div> : !validRange ? <div className="empty-callout warning-callout"><CircleHelp size={18} /><span>A data inicial precisa ser anterior ou igual à data final.</span></div> : matches.length ? <>

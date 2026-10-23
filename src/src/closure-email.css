@@ -1,0 +1,10 @@
+.closure-email-preferences{padding:20px;margin-bottom:20px}
+.closure-email-preferences h2{display:flex;align-items:center;gap:9px}
+.closure-email-preferences .panel-heading{align-items:flex-start;flex-wrap:wrap}
+.closure-email-summary p,.closure-email-help{font-size:13px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
+.closure-email-summary p{margin:6px 0}
+.closure-email-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.closure-email-fields label{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:13px;font-weight:600}
+.closure-email-fields textarea{resize:vertical;min-height:100px;width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;font-family:inherit;font-size:14px;line-height:1.6}
+.closure-email-fields textarea:focus-visible{outline:3px solid #a9c7ff;outline-offset:2px}
+@media(max-width:650px){.closure-email-fields{grid-template-columns:1fr}.closure-email-fields textarea{font-size:16px}.closure-email-preferences{padding:16px}}
