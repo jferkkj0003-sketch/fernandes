@@ -2,28 +2,38 @@ import React, { useState } from 'react';
 import { X, Mail, Check, ArrowDownToLine } from 'lucide-react';
 import { normalizeRecipients } from './lib/email-recipients';
 import { OUTLOOK_INSTALLER } from './lib/outlook-helper';
+import { appErrorMessage, isOutdatedAssetError, readEmailRecovery, saveEmailRecovery, clearEmailRecovery } from './lib/app-update';
 
 const date = (value) => (value || '').split('-').reverse().join('/');
 export default function ClosureOutlookModal({ closure, user, onClose, onPrepare, onConfirmSent }) {
   const recipients = user?.user_metadata?.closure_email_recipients;
-  const [to, setTo] = useState((recipients?.to || []).join('; '));
-  const [cc, setCc] = useState((recipients?.cc || []).join('; '));
-  const [subject, setSubject] = useState(`Fechamento de frete ${closure.number} - ${closure.driver} - ${date(closure.start)} a ${date(closure.end)}`);
-  const [body, setBody] = useState(`Prezados,\n\nSegue em anexo o fechamento de frete de ${closure.driver}, referente ao período de ${date(closure.start)} a ${date(closure.end)}.\n\nQuantidade de tickets: ${closure.count}\nValor total: ${Number(closure.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n\nPor gentileza, verificar para programação do pagamento.`);
+  const [recovery] = useState(() => { try { return readEmailRecovery(window.sessionStorage, closure.id, user?.id); } catch { return null; } });
+  const [to, setTo] = useState(recovery?.to ?? (recipients?.to || []).join('; '));
+  const [cc, setCc] = useState(recovery?.cc ?? (recipients?.cc || []).join('; '));
+  const [subject, setSubject] = useState(recovery?.subject ?? `Fechamento de frete ${closure.number} - ${closure.driver} - ${date(closure.start)} a ${date(closure.end)}`);
+  const [body, setBody] = useState(recovery?.body ?? `Prezados,\n\nSegue em anexo o fechamento de frete de ${closure.driver}, referente ao período de ${date(closure.start)} a ${date(closure.end)}.\n\nQuantidade de tickets: ${closure.count}\nValor total: ${Number(closure.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n\nPor gentileza, verificar para programação do pagamento.`);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+  const refresh = () => {
+    try {
+      saveEmailRecovery(window.sessionStorage, closure.id, user?.id, { to, cc, subject, body });
+      window.location.reload();
+    } catch { setError('Não foi possível guardar a mensagem para atualizar. Copie o texto antes de atualizar a página manualmente.'); }
+  };
   const prepare = async (mode = 'helper') => {
     if (busy) return;
-    setError(''); setResult(''); setReady(false);
+    setError(''); setResult(''); setReady(false); setNeedsRefresh(false);
     try {
       const recipients = normalizeRecipients(to, cc);
       if (!recipients.to.length) throw new Error('Informe pelo menos um destinatário no campo Para.');
       setBusy(true);
       const saved = await onPrepare(closure, { to: recipients.to.join('; '), cc: recipients.cc.join('; '), subject, body }, mode);
       setResult(saved); setReady(true);
-    } catch (err) { setError(err.message || 'Não foi possível preparar o e-mail. Tente novamente.'); }
+      try { clearEmailRecovery(window.sessionStorage, closure.id, user?.id); } catch { }
+    } catch (err) { setNeedsRefresh(isOutdatedAssetError(err)); setError(appErrorMessage(err, 'Não foi possível preparar o e-mail. Tente novamente.')); }
     finally { setBusy(false); }
   };
   return <div className="modal-backdrop" role="presentation"><section className="edit-modal closure-outlook-modal" role="dialog" aria-modal="true" aria-labelledby="outlook-title">
@@ -35,6 +45,7 @@ export default function ClosureOutlookModal({ closure, user, onClose, onPrepare,
       <p className="closure-email-help">A assinatura será a configurada no Outlook. As alterações acima valem para esta mensagem; os destinatários padrão continuam em “Editar destinatários”.</p>
       <p className="closure-email-help">Use o Outlook clássico no Windows. O navegador pode pedir autorização para abrir o auxiliar e acessar o computador local. O PDF é transferido diretamente para o auxiliar, sem precisar baixar ou extrair arquivos manualmente.</p>
       {error && <p className="admin-delete-error" role="alert">{error}</p>}{result && <p role="status" className="account-message">{result}</p>}
+      {needsRefresh && <div className="outlook-setup"><p>O texto será guardado nesta aba. Após atualizar, abra novamente este fechamento para recuperar a mensagem.</p><button type="button" className="button secondary" onClick={refresh} disabled={busy}>Atualizar app e guardar mensagem</button></div>}
       <div className="form-actions"><button type="button" className="button secondary" onClick={onClose} disabled={busy}>Fechar</button><button className="button primary" disabled={busy}><Mail size={16} /> {busy ? 'Conectando ao Outlook e preparando o PDF…' : ready ? 'Abrir outra mensagem no Outlook' : 'Abrir no Outlook'}</button></div>
       <button type="button" className="text-button outlook-fallback" disabled={busy} onClick={() => prepare('zip')}>Alternativa: baixar pacote ZIP</button>
     </form>

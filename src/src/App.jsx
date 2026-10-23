@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   ArrowDownToLine, ArrowUpRight, BadgeDollarSign, Bell, Check, ChevronDown,
   CircleHelp, ClipboardList, CreditCard, Eye, LayoutDashboard, Menu, Plus, Pencil,
@@ -19,6 +20,7 @@ import ClosureEmailPreferences from './ClosureEmailPreferences';
 import ClosureOutlookModal from './ClosureOutlookModal';
 import { buildOutlookPackage } from './lib/outlook-package';
 import { startOutlookHelper } from './lib/outlook-helper';
+import { appErrorMessage } from './lib/app-update';
 import History from './History';
 import { downloadPreferences } from './lib/downloads';
 
@@ -168,7 +170,6 @@ function buildClosureReportPdf(closure) {
 }
 
 async function buildClosurePdf(closure) {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
   const report = await PDFDocument.load(await buildClosureReportPdf(closure).arrayBuffer());
   const logoResponse = await fetch('/racao-confianca-logo.svg');
   if (logoResponse.ok) {
@@ -239,7 +240,7 @@ async function downloadClosurePdf(closure, setNotice, setCloudBusy) {
       ? `PDF salvo na pasta ${result.folder}: ${result.filename}`
       : `PDF do fechamento ${closure.number} pronto para baixar.`);
   } catch (error) {
-    setNotice(`Não foi possível salvar o PDF: ${error.message || 'verifique os escaneamentos e tente novamente.'}`);
+    setNotice(appErrorMessage(error, 'Não foi possível salvar o PDF. Verifique os escaneamentos e tente novamente.'));
   } finally { setCloudBusy(false); window.setTimeout(() => setNotice(''), 10000); }
 }
 
@@ -258,7 +259,7 @@ function openClosurePdf(closure, setNotice, setCloudBusy) {
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   }).catch((error) => {
     tab.close();
-    setNotice(`Não foi possível montar o PDF: ${error.message || 'verifique os escaneamentos e tente novamente.'}`);
+    setNotice(appErrorMessage(error, 'Não foi possível montar o PDF. Verifique os escaneamentos e tente novamente.'));
   }).finally(() => { setCloudBusy(false); window.setTimeout(() => setNotice(''), 6000); });
 }
 
