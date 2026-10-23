@@ -277,24 +277,34 @@
   .metrics-grid.dashboard-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-/* Overlay navigation on every screen; the page uses the released sidebar space. */
-.main-area { margin-left: 0; }
+/* The desktop menu stays alongside the page until explicitly collapsed. */
+.main-area { margin-left: 0; transition: margin-left .2s ease; }
+.app-frame.navigation-open .main-area { margin-left: 280px; }
 .main-area > .content { max-width: none; }
 .mobile-menu, .close-mobile { display: inline-grid; min-width: 44px; min-height: 44px; }
 .close-mobile { margin-left: auto; }
 .sidebar {
-  width: min(320px, 86vw); height: 100dvh; z-index: 12;
+  width: 280px; height: 100dvh; z-index: 6;
   overflow-y: auto; overscroll-behavior: contain;
   padding-bottom: max(16px, env(safe-area-inset-bottom));
   transform: translateX(-100%); visibility: hidden; pointer-events: none; box-shadow: none;
   transition: transform .2s ease, visibility .2s;
 }
 .sidebar.sidebar-open {
-  transform: translateX(0); visibility: visible; pointer-events: auto;
-  box-shadow: 14px 0 40px #10203040;
+  transform: translateX(0); visibility: visible; pointer-events: auto; box-shadow: none;
 }
-.mobile-backdrop {
-  display: block; position: fixed; inset: 0; border: 0; z-index: 11;
-  background: #10243b66; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+@media (max-width: 800px) {
+  .app-frame.navigation-open .main-area { margin-left: 0; }
+  .sidebar {
+    position: relative; inset: auto; display: none; width: 100%; height: auto;
+    transform: none; overflow: visible; border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  .sidebar.sidebar-open { display: flex; box-shadow: none; }
+  .sidebar .brand-row { padding-bottom: 12px; }
+  .sidebar .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sidebar .sidebar-spacer, .sidebar .sidebar-help { display: none; }
+  .sidebar .profile-row { margin-top: 12px; }
 }
-@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .main-area { transition: none; }
+}
