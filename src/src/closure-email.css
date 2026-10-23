@@ -17,4 +17,6 @@
 .outlook-confirm{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
 .outlook-setup{padding:16px;margin:0 0 20px;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-size:13px;color:var(--muted)}
 .outlook-setup p{line-height:1.6}.outlook-setup a{text-decoration:none}.outlook-fallback{margin-top:16px}
+.outlook-setup summary{cursor:pointer;font-weight:700}
+.outlook-repeat{padding:16px;border:1px solid var(--line);border-left:4px solid var(--amber,#b77a12);border-radius:8px;margin:16px 0;background:var(--bg);font-size:13px;line-height:1.6}
 @media(max-width:650px){.closure-outlook-modal{padding:18px}.outlook-field input,.outlook-field textarea{font-size:16px}.closure-outlook-modal .form-actions{flex-wrap:wrap}}

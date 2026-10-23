@@ -50,7 +50,7 @@ test('a failed connection or Outlook error never reports opened or retries the c
   let calls = 0;
   const broken = createHelperSession({ token, port, launch: () => {}, request: async () => { calls++; throw new Error('lost response'); } });
   const job = { pdf: new Blob(['%PDF-']), filename: '001.pdf', to: 'a@example.com', cc: '', subject: 'Frete', body: 'Teste' };
-  await assert.rejects(broken.compose(job), /Confira o Outlook/);
+  await assert.rejects(broken.compose(job), (error) => error.outlookMayHaveOpened === true && /Confira o Outlook/.test(error.message));
   await assert.rejects(broken.compose(job), /já foi usada/);
   assert.equal(calls, 1);
   const rejected = createHelperSession({ token, port, launch: () => {}, request: async () => Response.json({ error: 'Outlook indisponível' }, { status: 500 }) });

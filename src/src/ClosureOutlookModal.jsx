@@ -4,6 +4,7 @@ import { normalizeRecipients } from './lib/email-recipients';
 import { OUTLOOK_INSTALLER } from './lib/outlook-helper';
 import { appErrorMessage, isOutdatedAssetError, readEmailRecovery, saveEmailRecovery, clearEmailRecovery } from './lib/app-update';
 import { closureEmailTemplate, paymentDateLabel, prepareClosureMessage } from './lib/closure-email-template';
+import { hasConfirmedOutlookHelper, rememberOutlookHelper, readOutlookAttempt, writeOutlookAttempt } from './lib/outlook-preferences';
 
 export default function ClosureOutlookModal({ closure, user, onClose, onPrepare, onConfirmSent, onGetConsultationLink }) {
   const recipients = user?.user_metadata?.closure_email_recipients;
@@ -15,6 +16,13 @@ export default function ClosureOutlookModal({ closure, user, onClose, onPrepare,
   const [consultationUrl, setConsultationUrl] = useState('');
   const [loadingLink, setLoadingLink] = useState(true);
   const [linkMessage, setLinkMessage] = useState('');
+  const [setupOpen, setSetupOpen] = useState(() => { try { return !hasConfirmedOutlookHelper(window.localStorage); } catch { return true; } });
+  const [lastAttempt, setLastAttempt] = useState(() => { try { return readOutlookAttempt(window.localStorage, closure.id, user?.id); } catch { return null; } });
+  const [repeatMode, setRepeatMode] = useState(null);
+  const storeAttempt = (value) => {
+    setLastAttempt(value);
+    try { writeOutlookAttempt(window.localStorage, closure.id, user?.id, value); } catch { }
+  };
   useEffect(() => {
     let active = true;
     Promise.resolve().then(() => onGetConsultationLink?.()).then((url) => {
@@ -34,24 +42,38 @@ export default function ClosureOutlookModal({ closure, user, onClose, onPrepare,
       window.location.reload();
     } catch { setError('Não foi possível guardar a mensagem para atualizar. Copie o texto antes de atualizar a página manualmente.'); }
   };
-  const prepare = async (mode = 'helper') => {
+  const prepare = async (mode = 'helper', allowRepeat = false) => {
     if (busy) return;
+    let previous = lastAttempt;
+    try { previous = readOutlookAttempt(window.localStorage, closure.id, user?.id) || previous; } catch { }
+    if (previous && !allowRepeat) { setLastAttempt(previous); setRepeatMode(mode); return; }
+    setRepeatMode(null);
     setError(''); setResult(''); setReady(false); setNeedsRefresh(false);
+    let started = false;
     try {
       const recipients = normalizeRecipients(to, cc);
       if (!recipients.to.length) throw new Error('Informe pelo menos um destinatário no campo Para.');
       const message = prepareClosureMessage(body, consultationUrl);
       setBody(message.body);
       setBusy(true);
+      storeAttempt({ status: 'preparing', at: Date.now() }); started = true;
       const saved = await onPrepare(closure, { to: recipients.to.join('; '), cc: recipients.cc.join('; '), subject, ...message }, mode);
       setResult(saved); setReady(true);
+      storeAttempt({ status: mode === 'helper' ? 'opened' : 'packaged', at: Date.now() });
+      if (mode === 'helper') {
+        try { rememberOutlookHelper(window.localStorage); } catch { }
+        setSetupOpen(false);
+      }
       try { clearEmailRecovery(window.sessionStorage, closure.id, user?.id); } catch { }
-    } catch (err) { setNeedsRefresh(isOutdatedAssetError(err)); setError(appErrorMessage(err, 'Não foi possível preparar o e-mail. Tente novamente.')); }
+    } catch (err) {
+      if (started) storeAttempt(err.outlookMayHaveOpened ? { status: 'uncertain', at: Date.now() } : previous);
+      setNeedsRefresh(isOutdatedAssetError(err)); setError(appErrorMessage(err, 'Não foi possível preparar o e-mail. Tente novamente.'));
+    }
     finally { setBusy(false); }
   };
   return <div className="modal-backdrop" role="presentation"><section className="edit-modal closure-outlook-modal" role="dialog" aria-modal="true" aria-labelledby="outlook-title">
     <div className="panel-heading"><div><h2 id="outlook-title">Enviar no e-mail · fechamento {closure.number}</h2><p>Revise os destinatários e a mensagem antes de preparar o Outlook.</p></div><button className="icon-button" disabled={busy} onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
-    <div className="outlook-setup"><strong>Primeira vez neste computador?</strong><p>Baixe e execute o auxiliar uma única vez. Depois, basta clicar em Abrir no Outlook. A instalação vale para este usuário do Windows.</p><a href={OUTLOOK_INSTALLER} download="DDE-Outlook.exe" className="button secondary"><ArrowDownToLine size={16} /> Instalar auxiliar (uma vez)</a></div>
+    <details className="outlook-setup" open={setupOpen} onToggle={(event) => setSetupOpen(event.currentTarget.open)}><summary>Auxiliar do Outlook — instalação e ajuda</summary><p>Primeira vez neste computador? Baixe e execute o auxiliar uma única vez. Depois, basta clicar em Abrir no Outlook. A instalação vale para este usuário do Windows.</p><a href={OUTLOOK_INSTALLER} download="DDE-Outlook.exe" className="button secondary"><ArrowDownToLine size={16} /> Instalar auxiliar (uma vez)</a></details>
     <form onSubmit={(event) => { event.preventDefault(); prepare(); }}><div className="filter-fields closure-email-fields"><label>Para<input value={to} onChange={(e) => setTo(e.target.value)} disabled={busy} autoFocus required /></label><label>CC<input value={cc} onChange={(e) => setCc(e.target.value)} disabled={busy} /></label></div>
       <label className="outlook-field">Assunto<input value={subject} onChange={(e) => setSubject(e.target.value)} disabled={busy} required /></label>
       <label className="outlook-field">Mensagem<textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={busy} required rows={8} /></label>
@@ -62,6 +84,7 @@ export default function ClosureOutlookModal({ closure, user, onClose, onPrepare,
       <p className="closure-email-help">Use o Outlook clássico no Windows. O navegador pode pedir autorização para abrir o auxiliar e acessar o computador local. O PDF é transferido diretamente para o auxiliar, sem precisar baixar ou extrair arquivos manualmente.</p>
       {error && <p className="admin-delete-error" role="alert">{error}</p>}{result && <p role="status" className="account-message">{result}</p>}
       {needsRefresh && <div className="outlook-setup"><p>O texto será guardado nesta aba. Após atualizar, abra novamente este fechamento para recuperar a mensagem.</p><button type="button" className="button secondary" onClick={refresh} disabled={busy}>Atualizar app e guardar mensagem</button></div>}
+      {repeatMode && <div className="outlook-repeat" role="alert"><strong>Preparar novamente o fechamento {closure.number}?</strong><p>{lastAttempt?.status === 'opened' ? 'Uma mensagem deste fechamento já foi aberta no Outlook.' : lastAttempt?.status === 'packaged' ? 'Um pacote ZIP deste fechamento já foi preparado.' : 'Já houve uma tentativa de preparar este fechamento; o resultado pode estar no Outlook.'} Confira os rascunhos e os enviados antes de criar outra mensagem, para evitar duplicidade.</p><div className="form-actions"><button type="button" className="button secondary" onClick={() => setRepeatMode(null)} disabled={busy}>Voltar</button><button type="button" className="button primary" onClick={() => prepare(repeatMode, true)} disabled={busy || loadingLink}>{repeatMode === 'zip' ? 'Preparar outro ZIP' : 'Abrir outra mensagem'}</button></div></div>}
       <div className="form-actions"><button type="button" className="button secondary" onClick={onClose} disabled={busy}>Fechar</button><button className="button primary" disabled={busy || loadingLink}><Mail size={16} /> {busy ? 'Conectando ao Outlook e preparando o PDF…' : ready ? 'Abrir outra mensagem no Outlook' : 'Abrir no Outlook'}</button></div>
       <button type="button" className="text-button outlook-fallback" disabled={busy} onClick={() => prepare('zip')}>Alternativa: baixar pacote ZIP</button>
     </form>

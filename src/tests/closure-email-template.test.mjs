@@ -1,6 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { closureEmailTemplate, paymentDateLabel, prepareClosureMessage } from '../src/lib/closure-email-template.js';
+import { closureEmailGreeting, closureEmailTemplate, paymentDateLabel, prepareClosureMessage } from '../src/lib/closure-email-template.js';
+
+test('greeting follows Manaus morning, afternoon and evening boundaries regardless of host timezone', () => {
+  assert.equal(closureEmailGreeting(new Date('2026-10-23T09:59:00Z')), 'Boa noite');
+  assert.equal(closureEmailGreeting(new Date('2026-10-23T10:00:00Z')), 'Bom dia');
+  assert.equal(closureEmailGreeting(new Date('2026-10-23T15:59:00Z')), 'Bom dia');
+  assert.equal(closureEmailGreeting(new Date('2026-10-23T16:00:00Z')), 'Boa tarde');
+  assert.equal(closureEmailGreeting(new Date('2026-10-23T21:59:00Z')), 'Boa tarde');
+  assert.equal(closureEmailGreeting(new Date('2026-10-23T22:00:00Z')), 'Boa noite');
+  assert.equal(closureEmailGreeting(new Date('2026-10-24T02:00:00Z')), 'Boa noite');
+});
+
+test('automatic greeting refreshes when preparing later, while a personal greeting stays intact', () => {
+  const body = closureEmailTemplate({ driver: 'ELIAS' }, new Date('2026-10-23T14:00:00Z')).body;
+  assert.ok(body.startsWith('Bom dia!'));
+  assert.ok(prepareClosureMessage(body, '', new Date('2026-10-23T18:00:00Z')).body.startsWith('Boa tarde!'));
+  assert.ok(prepareClosureMessage(body.replace('Bom dia!', 'Olá, equipe!'), '', new Date('2026-10-23T23:00:00Z')).body.startsWith('Olá, equipe!'));
+});
 
 test('each message uses the selected closure driver, never a fixed name or current filter', () => {
   const now = new Date('2026-10-23T17:55:00Z');

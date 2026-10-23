@@ -1,6 +1,11 @@
 import { normalizeRecipients } from './email-recipients.js';
 
 export const OUTLOOK_INSTALLER = '/outlook/DDE-Outlook.exe?v=1.0.2';
+function uncertainOutlookError(message) {
+  const error = new Error(message);
+  error.outlookMayHaveOpened = true;
+  return error;
+}
 export function bytesToBase64(bytes) {
   let result = '';
   // A multiple of three avoids internal padding between chunks.
@@ -51,9 +56,11 @@ export function createHelperSession({ token, port, request = fetch, launch, paus
           method: 'POST', headers: { ...options.headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: token, filename, to: recipients.to.join('; '), cc: recipients.cc.join('; '), subject, body, consultationUrl, paymentDate, pdf: encoded }),
         }, 90000);
-      } catch { throw new Error('O auxiliar não confirmou a abertura. Confira o Outlook antes de repetir para evitar duas mensagens.'); }
-      const result = await response.json();
-      if (!response.ok || result.opened !== true) throw new Error(result.error || 'O auxiliar não confirmou a mensagem. Confira o Outlook antes de tentar novamente.');
+      } catch { throw uncertainOutlookError('O auxiliar não confirmou a abertura. Confira o Outlook antes de repetir para evitar duas mensagens.'); }
+      let result;
+      try { result = await response.json(); }
+      catch { throw uncertainOutlookError('A resposta do auxiliar foi interrompida. Confira o Outlook antes de repetir para evitar duas mensagens.'); }
+      if (!response.ok || result.opened !== true) throw uncertainOutlookError(result.error || 'O auxiliar não confirmou a mensagem. Confira o Outlook antes de tentar novamente.');
       return 'Mensagem aberta no Outlook com o PDF. Confira os destinatários, a assinatura e o anexo antes de enviar.';
     },
   };

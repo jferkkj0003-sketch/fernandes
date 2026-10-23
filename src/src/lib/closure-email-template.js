@@ -2,17 +2,24 @@ import { nextPaymentDate, paymentToday } from './payments.js';
 
 export const paymentDateLabel = (now = new Date()) => nextPaymentDate(paymentToday(now)).split('-').reverse().join('/');
 
+export function closureEmailGreeting(now = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Manaus', hour: '2-digit', hourCycle: 'h23' }).format(now));
+  if (hour >= 6 && hour < 12) return 'Bom dia';
+  if (hour >= 12 && hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
 export function closureEmailTemplate(closure, now = new Date()) {
   const name = String(closure.driverDetails?.fullName || closure.driver || '').trim();
   return {
     subject: `PROGRAMAÇÃO DE PAGAMENTO - ${name}`,
-    body: `Boa tarde!\n\nSegue em anexo controle fechado do motorista ${name}, programar pagamento para ${paymentDateLabel(now)}.\n\n• Controle;\n• Ticket de Pesagem;\n• Dados Bancários.\n\nPara mais detalhes, acesse: Consultar fretes.\n\nAtenciosamente.`,
+    body: `${closureEmailGreeting(now)}!\n\nSegue em anexo controle fechado do motorista ${name}, programar pagamento para ${paymentDateLabel(now)}.\n\n• Controle;\n• Ticket de Pesagem;\n• Dados Bancários.\n\nPara mais detalhes, acesse: Consultar fretes.\n\nAtenciosamente.`,
   };
 }
 
 export function prepareClosureMessage(body, consultationUrl, now = new Date()) {
   const paymentDate = paymentDateLabel(now);
-  let text = String(body || '');
+  let text = String(body || '').replace(/^(Bom dia|Boa tarde|Boa noite)!/i, `${closureEmailGreeting(now)}!`);
   const datePattern = /((?:programar pagamento|pagamento programado) para\s+)\d{2}\/\d{2}\/\d{4}/gi;
   if (datePattern.test(text)) text = text.replace(datePattern, `$1${paymentDate}`);
   else text += `\n\nPagamento programado para ${paymentDate}.`;
