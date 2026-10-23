@@ -276,3 +276,25 @@
 @media (min-width: 801px) {
   .metrics-grid.dashboard-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* Overlay navigation on every screen; the page uses the released sidebar space. */
+.main-area { margin-left: 0; }
+.main-area > .content { max-width: none; }
+.mobile-menu, .close-mobile { display: inline-grid; min-width: 44px; min-height: 44px; }
+.close-mobile { margin-left: auto; }
+.sidebar {
+  width: min(320px, 86vw); height: 100dvh; z-index: 12;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-100%); visibility: hidden; pointer-events: none; box-shadow: none;
+  transition: transform .2s ease, visibility .2s;
+}
+.sidebar.sidebar-open {
+  transform: translateX(0); visibility: visible; pointer-events: auto;
+  box-shadow: 14px 0 40px #10203040;
+}
+.mobile-backdrop {
+  display: block; position: fixed; inset: 0; border: 0; z-index: 11;
+  background: #10243b66; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
