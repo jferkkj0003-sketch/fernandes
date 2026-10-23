@@ -320,19 +320,23 @@ export default function App() {
     if (!mobileNav) return undefined;
     const sidebar = sidebarRef.current;
     const controls = () => [...(sidebar?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]') || [])];
-    (sidebar?.querySelector('.nav-item.active') || controls()[0])?.focus();
+    const focusFrame = window.requestAnimationFrame(() => {
+      (sidebar?.querySelector('.nav-item.active') || controls()[0])?.focus();
+    });
     const handleMenuKey = (event) => {
       if (event.key === 'Escape') { event.preventDefault(); setMobileNav(false); }
       if (event.key !== 'Tab') return;
       const items = controls();
       const first = items[0], last = items.at(-1);
       if (!first) return;
+      if (!sidebar?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); return; }
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', handleMenuKey);
     return () => {
       document.removeEventListener('keydown', handleMenuKey);
+      window.cancelAnimationFrame(focusFrame);
       menuButtonRef.current?.focus();
     };
   }, [mobileNav]);
