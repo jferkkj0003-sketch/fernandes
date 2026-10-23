@@ -16,7 +16,7 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("DDE Fretes - Outlook")]
 [assembly: System.Reflection.AssemblyCompany("DDE Fretes")]
 [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.0.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.0.1.0")]
 
 internal static class Program
 {
@@ -69,7 +69,7 @@ internal static class Program
         }
         using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DDEFretesOutlook"))
         {
-            key.SetValue("DisplayName", Title); key.SetValue("DisplayVersion", "1.0.0");
+            key.SetValue("DisplayName", Title); key.SetValue("DisplayVersion", "1.0.1");
             key.SetValue("Publisher", "DDE Fretes"); key.SetValue("InstallLocation", InstallFolder);
             key.SetValue("UninstallString", "\"" + InstallExe + "\" --uninstall");
             key.SetValue("NoModify", 1); key.SetValue("NoRepair", 1);

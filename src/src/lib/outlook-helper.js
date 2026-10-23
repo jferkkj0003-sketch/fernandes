@@ -1,6 +1,6 @@
 import { normalizeRecipients } from './email-recipients.js';
 
-export const OUTLOOK_INSTALLER = '/outlook/DDE-Outlook.exe';
+export const OUTLOOK_INSTALLER = '/outlook/DDE-Outlook.exe?v=1.0.1';
 export function bytesToBase64(bytes) {
   let result = '';
   // A multiple of three avoids internal padding between chunks.
