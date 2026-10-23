@@ -2,6 +2,8 @@
 
 Requer Windows, .NET Framework 4.x e Outlook clássico configurado. Foi desenvolvido para preservar a assinatura criada pelo Outlook, inclusive imagens, inserindo a mensagem antes dela no WordEditor. Não chama Send e não altera as credenciais do Outlook.
 
+A versão 1.0.2 usa o nome do motorista e a data recebidos do fechamento, formata a data de pagamento e inclui o link existente do painel de consulta quando informado. Para exibir o rascunho, transfere a ativação ao Outlook e restaura/eleva somente a janela dessa mensagem. A elevação temporária é removida imediatamente; não altera configurações globais de foco do Windows. A exibição em primeiro plano ainda deve ser conferida no Outlook do usuário.
+
 ## Instalar uma vez
 
 No app: Enviar no e-mail → Instalar auxiliar (uma vez). Execute DDE-Outlook.exe e confirme a instalação. Registra `dde-fretes-outlook` somente no usuário atual do Windows e copia o executável para `%LOCALAPPDATA%\DDE Fretes\Outlook`. Não usa tarefas agendadas, inicialização automática ou serviço do Windows.

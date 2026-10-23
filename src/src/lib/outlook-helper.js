@@ -1,6 +1,6 @@
 import { normalizeRecipients } from './email-recipients.js';
 
-export const OUTLOOK_INSTALLER = '/outlook/DDE-Outlook.exe?v=1.0.1';
+export const OUTLOOK_INSTALLER = '/outlook/DDE-Outlook.exe?v=1.0.2';
 export function bytesToBase64(bytes) {
   let result = '';
   // A multiple of three avoids internal padding between chunks.
@@ -38,7 +38,7 @@ export function createHelperSession({ token, port, request = fetch, launch, paus
       } while (now() < deadline);
       throw new Error('Não consegui conectar ao auxiliar. Instale-o uma vez neste computador e autorize a abertura e o acesso local quando o navegador solicitar. Depois clique novamente em Abrir no Outlook.');
     },
-    async compose({ pdf, filename, to, cc, subject, body }) {
+    async compose({ pdf, filename, to, cc, subject, body, consultationUrl = '', paymentDate = '' }) {
       if (submitted) throw new Error('Esta solicitação já foi usada. Confira se a mensagem abriu no Outlook antes de tentar outra vez.');
       const recipients = normalizeRecipients(to, cc);
       if (!recipients.to.length) throw new Error('Informe pelo menos um destinatário no campo Para.');
@@ -49,7 +49,7 @@ export function createHelperSession({ token, port, request = fetch, launch, paus
       try {
         response = await timedRequest('/compose', {
           method: 'POST', headers: { ...options.headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: token, filename, to: recipients.to.join('; '), cc: recipients.cc.join('; '), subject, body, pdf: encoded }),
+          body: JSON.stringify({ id: token, filename, to: recipients.to.join('; '), cc: recipients.cc.join('; '), subject, body, consultationUrl, paymentDate, pdf: encoded }),
         }, 90000);
       } catch { throw new Error('O auxiliar não confirmou a abertura. Confira o Outlook antes de repetir para evitar duas mensagens.'); }
       const result = await response.json();

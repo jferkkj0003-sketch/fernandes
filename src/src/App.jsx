@@ -263,6 +263,12 @@ function openClosurePdf(closure, setNotice, setCloudBusy) {
   }).finally(() => { setCloudBusy(false); window.setTimeout(() => setNotice(''), 6000); });
 }
 
+async function getClosureConsultationLink() {
+  if (!cloudConfigured) return '';
+  const current = await getDashboardShareLink();
+  return current?.token ? `https://dde-fretes.vercel.app/?painel=${encodeURIComponent(current.token)}` : '';
+}
+
 export default function App() {
   const [page, setPage] = useState('painel');
   const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
@@ -538,7 +544,8 @@ export default function App() {
     }
     const directory = await downloadPreferences.prepare();
     const pdf = await buildClosurePdf(closure);
-    const archive = await buildOutlookPackage({ pdf, filename: pdfFilename(closure), ...message });
+    const zipMessage = message.consultationUrl ? { ...message, body: message.body.replace('Consultar fretes.', message.consultationUrl) } : message;
+    const archive = await buildOutlookPackage({ pdf, filename: pdfFilename(closure), ...zipMessage });
     const name = `Fechamento-${String(closure.number).replace(/[^a-zA-Z0-9-]/g, '')}-Outlook.zip`;
     const saved = await downloadPreferences.save(archive, name, directory);
     return saved.mode === 'folder'
@@ -1056,7 +1063,7 @@ export default function App() {
             </section>
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
-            {closureToEmail && <ClosureOutlookModal key={closureToEmail.id} closure={closureToEmail} user={sessionUser} onClose={() => setClosureToEmail(null)} onPrepare={prepareClosureEmail} onConfirmSent={markClosureRequested} />}
+            {closureToEmail && <ClosureOutlookModal key={closureToEmail.id} closure={closureToEmail} user={sessionUser} onClose={() => setClosureToEmail(null)} onPrepare={prepareClosureEmail} onConfirmSent={markClosureRequested} onGetConsultationLink={getClosureConsultationLink} />}
             {accountOpen && <AccountModal user={sessionUser} onClose={() => setAccountOpen(false)} onSave={saveAccount} busy={accountBusy} message={accountMessage} isAdmin={isAdmin} />}
             {closureToDelete && <AdminDeleteModal closure={closureToDelete} password={deletePassword} setPassword={setDeletePassword} message={deletePasswordMessage} busy={deleteBusy} onClose={() => { if (!deleteBusy) { setClosureToDelete(null); setDeletePassword(''); setDeletePasswordMessage(''); } }} onConfirm={confirmDeleteClosure} />}
             {driverToUpdate && <DriverActiveModal driver={driverToUpdate} ticketCount={tickets.filter((ticket) => matchesDriver(ticket, driverToUpdate)).length} closureCount={closures.filter((closure) => matchesDriver(closure, driverToUpdate)).length} password={driverActivePassword} setPassword={setDriverActivePassword} message={driverActiveMessage} busy={driverActiveBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverActiveBusy) { setDriverToUpdate(null); setDriverActivePassword(''); setDriverActiveMessage(''); } }} onConfirm={confirmDriverActive} />}

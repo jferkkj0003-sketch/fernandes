@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Web;
 using System.Web.Script.Serialization;
@@ -16,7 +17,7 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("DDE Fretes - Outlook")]
 [assembly: System.Reflection.AssemblyCompany("DDE Fretes")]
 [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.0.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.0.2.0")]
 
 internal static class Program
 {
@@ -28,6 +29,23 @@ internal static class Program
     static readonly string InstallExe = Path.Combine(InstallFolder, "DDE-Outlook.exe");
     static readonly string ProtocolKey = @"Software\Classes\" + Scheme;
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = MaxBody };
+    [DllImport("ole32.dll")] static extern int CoAllowSetForegroundWindow([MarshalAs(UnmanagedType.IUnknown)] object proxy, IntPtr reserved);
+    [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(uint processId);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr window);
+    [DllImport("user32.dll")] static extern bool ShowWindowAsync(IntPtr window, int command);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
+    delegate bool EnumWindowCallback(IntPtr window, IntPtr parameter);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowCallback callback, IntPtr parameter);
+    [ComImport, Guid("00000114-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IOleWindow
+    {
+        [PreserveSig] int GetWindow(out IntPtr window);
+        [PreserveSig] int ContextSensitiveHelp([MarshalAs(UnmanagedType.Bool)] bool enterMode);
+    }
 
     [STAThread]
     static int Main(string[] args)
@@ -41,6 +59,7 @@ internal static class Program
                 Uri uri = new Uri(args[0]);
                 string token; int port;
                 ParseLaunch(uri, out token, out port);
+                foreach (Process outlook in Process.GetProcessesByName("OUTLOOK")) { try { AllowSetForegroundWindow((uint)outlook.Id); } catch { } }
                 Serve(token, port);
                 return 0;
             }
@@ -69,7 +88,7 @@ internal static class Program
         }
         using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DDEFretesOutlook"))
         {
-            key.SetValue("DisplayName", Title); key.SetValue("DisplayVersion", "1.0.1");
+            key.SetValue("DisplayName", Title); key.SetValue("DisplayVersion", "1.0.2");
             key.SetValue("Publisher", "DDE Fretes"); key.SetValue("InstallLocation", InstallFolder);
             key.SetValue("UninstallString", "\"" + InstallExe + "\" --uninstall");
             key.SetValue("NoModify", 1); key.SetValue("NoRepair", 1);
@@ -171,6 +190,14 @@ internal static class Program
     {
         string to = Addresses(Field(job, "to", 10000), true), cc = Addresses(Field(job, "cc", 10000), false);
         string subject = Field(job, "subject", 1000), body = Field(job, "body", 100000);
+        string consultation = job.ContainsKey("consultationUrl") ? Field(job, "consultationUrl", 4096) : "";
+        string paymentDate = job.ContainsKey("paymentDate") ? Field(job, "paymentDate", 10) : "";
+        if (consultation.Length > 0)
+        {
+            Uri url;
+            if (!Uri.TryCreate(consultation, UriKind.Absolute, out url) || url.Scheme != "https" || url.Host != "dde-fretes.vercel.app" || !Regex.IsMatch(HttpUtility.ParseQueryString(url.Query)["painel"] ?? "", "^[a-fA-F0-9]{64}$")) throw new Exception("Link de consulta inválido.");
+        }
+        if (paymentDate.Length > 0 && !Regex.IsMatch(paymentDate, @"^\d{2}/\d{2}/\d{4}$")) throw new Exception("Data do pagamento inválida.");
         string filename = Field(job, "filename", 180);
         if (subject.Trim().Length == 0 || subject.Contains("\r") || subject.Contains("\n")) throw new Exception("Confira o assunto do e-mail.");
         if (!filename.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || Path.GetFileName(filename) != filename) throw new Exception("Nome do PDF inválido.");
@@ -183,6 +210,7 @@ internal static class Program
         Type outlook = Type.GetTypeFromProgID("Outlook.Application");
         if (outlook == null) throw new Exception("O Outlook clássico não foi encontrado. Instale e configure o Outlook neste computador.");
         dynamic app = Activator.CreateInstance(outlook);
+        try { CoAllowSetForegroundWindow((object)app, IntPtr.Zero); } catch { }
         dynamic mail = app.CreateItem(0);
         mail.To = to; mail.CC = cc; mail.Subject = subject;
         mail.Display(false);
@@ -195,9 +223,65 @@ internal static class Program
         }
         if (doc == null) throw new Exception("O Outlook abriu, mas não foi possível preparar o texto. Confira a mensagem antes de tentar novamente.");
         // Insert before the existing signature; do not replace HTMLBody or its embedded logo.
-        doc.Range(0, 0).InsertBefore(body.Replace("\r\n", "\n").Replace("\n", "\r\n") + "\r\n\r\n");
+        dynamic inserted = doc.Range(0, 0);
+        inserted.InsertBefore(body.Replace("\r\n", "\n").Replace("\n", "\r\n") + "\r\n\r\n");
+        try { inserted.Font.Name = "Times New Roman"; inserted.Font.Size = 12; } catch { }
+        if (paymentDate.Length > 0)
+        {
+            try
+            {
+                dynamic dateRange = inserted.Duplicate;
+                dateRange.Find.Text = paymentDate; dateRange.Find.Forward = true; dateRange.Find.Wrap = 0;
+                if (dateRange.Find.Execute()) dateRange.Font.Bold = -1;
+            }
+            catch { /* The payment date remains in the text even if formatting is unavailable. */ }
+        }
+        if (consultation.Length > 0)
+        {
+            try
+            {
+                dynamic linkRange = inserted.Duplicate;
+                linkRange.Find.Text = "Consultar fretes."; linkRange.Find.Forward = true; linkRange.Find.Wrap = 0;
+                if (linkRange.Find.Execute()) doc.Hyperlinks.Add(linkRange, consultation);
+            }
+            catch { doc.Range(0, 0).InsertBefore("Consultar fretes: " + consultation + "\r\n\r\n"); }
+        }
         mail.Save(); mail.Attachments.Add(path, 1, Type.Missing, Type.Missing); mail.Save();
         inspector.Activate();
+        FocusInspector((object)inspector, subject);
+    }
+
+    static void FocusInspector(object inspectorObject, string subject)
+    {
+        try
+        {
+            IntPtr window = IntPtr.Zero;
+            try { ((IOleWindow)inspectorObject).GetWindow(out window); } catch { }
+            if (window == IntPtr.Zero)
+            {
+                string caption = Convert.ToString(((dynamic)inspectorObject).Caption);
+                EnumWindows(delegate(IntPtr candidate, IntPtr unused) {
+                    var text = new StringBuilder(2048); GetWindowText(candidate, text, text.Capacity);
+                    if (text.ToString() != caption && !text.ToString().StartsWith(subject + " -", StringComparison.Ordinal)) return true;
+                    uint pid; GetWindowThreadProcessId(candidate, out pid);
+                    try { if (!Process.GetProcessById((int)pid).ProcessName.Equals("OUTLOOK", StringComparison.OrdinalIgnoreCase)) return true; } catch { return true; }
+                    window = candidate; return false;
+                }, IntPtr.Zero);
+            }
+            if (window == IntPtr.Zero) return;
+            uint processId; GetWindowThreadProcessId(window, out processId);
+            AllowSetForegroundWindow(processId);
+            try { CoAllowSetForegroundWindow(inspectorObject, IntPtr.Zero); } catch { }
+            if (IsIconic(window)) ShowWindowAsync(window, 9);
+            else ShowWindowAsync(window, 5);
+            BringWindowToTop(window);
+            // Raise only this draft, then immediately release topmost; no global focus settings change.
+            SetWindowPos(window, new IntPtr(-1), 0, 0, 0, 0, 0x0043);
+            SetWindowPos(window, new IntPtr(-2), 0, 0, 0, 0, 0x0043);
+            ((dynamic)inspectorObject).Activate();
+            SetForegroundWindow(window);
+        }
+        catch { /* The draft remains available if Windows declines the focus request. */ }
     }
 
     sealed class Request

@@ -15,3 +15,4 @@ import './dashboard-summary.test.mjs';
 import './outlook-package.test.mjs';
 import './outlook-helper.test.mjs';
 import './app-update.test.mjs';
+import './closure-email-template.test.mjs';
