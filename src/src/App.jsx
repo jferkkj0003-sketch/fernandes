@@ -280,6 +280,8 @@ export default function App() {
   const [scanPrefetchProgress, setScanPrefetchProgress] = useState(null);
   const [cloudLoadError, setCloudLoadError] = useState('');
   const [mobileNav, setMobileNav] = useState(false);
+  const menuButtonRef = useRef(null);
+  const sidebarRef = useRef(null);
   const [editingTicket, setEditingTicket] = useState(null);
   const [viewingTicket, setViewingTicket] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -316,14 +318,22 @@ export default function App() {
 
   useEffect(() => {
     if (!mobileNav) return undefined;
-    const closeOnEscape = (event) => { if (event.key === 'Escape') setMobileNav(false); };
-    const mobileMedia = window.matchMedia('(max-width: 800px)');
-    const closeOnDesktop = () => { if (!mobileMedia.matches) setMobileNav(false); };
-    document.addEventListener('keydown', closeOnEscape);
-    mobileMedia.addEventListener('change', closeOnDesktop);
+    const sidebar = sidebarRef.current;
+    const controls = () => [...(sidebar?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]') || [])];
+    (sidebar?.querySelector('.nav-item.active') || controls()[0])?.focus();
+    const handleMenuKey = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); setMobileNav(false); }
+      if (event.key !== 'Tab') return;
+      const items = controls();
+      const first = items[0], last = items.at(-1);
+      if (!first) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', handleMenuKey);
     return () => {
-      document.removeEventListener('keydown', closeOnEscape);
-      mobileMedia.removeEventListener('change', closeOnDesktop);
+      document.removeEventListener('keydown', handleMenuKey);
+      menuButtonRef.current?.focus();
     };
   }, [mobileNav]);
 
@@ -990,7 +1000,7 @@ export default function App() {
         </main>
       ) : authReady && !showLogin && (!cloudConfigured || cloudDataReady) ? (
         <>
-          <aside id="main-navigation" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
+          <aside ref={sidebarRef} id="main-navigation" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`} inert={!mobileNav} aria-hidden={!mobileNav} role={mobileNav ? 'dialog' : undefined} aria-modal={mobileNav ? true : undefined} aria-label="Menu de navegação">
             <div className="brand-row">
               <img className="brand-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
               <button className="icon-button close-mobile" aria-label="Fechar menu" onClick={() => setMobileNav(false)}><X size={18} /></button>
@@ -1005,15 +1015,15 @@ export default function App() {
             </nav>
             <div className="sidebar-spacer" />
             <div className="sidebar-help"><div className="help-icon"><CircleHelp size={17} /></div><div><strong>Precisa de ajuda?</strong><span>Consulte seus lançamentos</span></div><ArrowUpRight size={15} /></div>
-            <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Josué').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Josué'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
+            <div className="profile-row"><button className="profile-open" onClick={() => { setMobileNav(false); setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Josué').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Josué'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
           </aside>
 
           {mobileNav && <button className="mobile-backdrop" aria-label="Fechar menu" onClick={() => setMobileNav(false)} />}
 
-          <main className="main-area">
+          <main className="main-area" inert={mobileNav}>
             <header className="topbar">
               <div className="topbar-left">
-                <button className="icon-button mobile-menu" aria-label="Abrir menu" aria-expanded={mobileNav} aria-controls="main-navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
+                <button ref={menuButtonRef} className="icon-button mobile-menu" aria-label="Abrir menu" aria-expanded={mobileNav} aria-controls="main-navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
                 <div className="breadcrumb"><span className="breadcrumb-root">Operação <span>/</span></span><strong>{navItems.find((item) => item.id === page)?.label || 'Início'}</strong></div>
               </div>
               <div className="topbar-right">
