@@ -10,6 +10,7 @@ import {
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
+import { summarizeDashboardTickets } from './lib/dashboard-summary';
 import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
@@ -1052,10 +1053,6 @@ function PageHeading({ eyebrow = 'VISÃO GERAL', title, subtitle, action }) {
   return <div className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>{action}</div>;
 }
 
-function dashboardTicketStatus(ticket) {
-  if (ticket.requestStatus === 'Solicitado' || ticket.requestStatus === 'Aguardando envio') return ticket.requestStatus;
-  return ticket.status || 'Aberto';
-}
 
 function formatDashboardWeight(value) {
   const weight = Number(value || 0);
@@ -1064,7 +1061,7 @@ function formatDashboardWeight(value) {
     : `${weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
 }
 
-function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
+function Dashboard({ tickets, drivers: driverRecords }) {
   const [driverFilter, setDriverFilter] = useState('Todos');
   const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
   const [endDate, setEndDate] = useState(localToday);
@@ -1074,15 +1071,7 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
   const filteredTickets = useMemo(() => invalidDateRange ? [] : tickets.filter((ticket) =>
     (driverFilter === 'Todos' || recordDriverKey(ticket) === driverFilter) && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate),
   ), [tickets, driverFilter, startDate, endDate, invalidDateRange]);
-  const summary = useMemo(() => filteredTickets.reduce((result, ticket) => {
-    result.count += 1;
-    result.weight += Number(ticket.weight || 0);
-    result.amount += Number(ticket.gross || 0) - Number(ticket.discount || 0);
-    return result;
-  }, { count: 0, weight: 0, amount: 0 }), [filteredTickets]);
-  const openTickets = useMemo(() => filteredTickets
-    .filter((ticket) => dashboardTicketStatus(ticket) === 'Aberto')
-    .sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || '') || (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0)), [filteredTickets]);
+  const summary = useMemo(() => summarizeDashboardTickets(filteredTickets), [filteredTickets]);
   const chartData = useMemo(() => {
     const groups = new Map();
     for (const ticket of filteredTickets) {
@@ -1131,9 +1120,9 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
   const formatWeight = formatDashboardWeight;
 
   return <>
-    <PageHeading eyebrow="VISÃO GERAL" title="Painel de controle" subtitle="Resumo rápido da operação e dos tickets que ainda precisam de atenção." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
+    <PageHeading eyebrow="VISÃO GERAL" title="Painel de controle" subtitle="Consulte os fretes em aberto, fechados e solicitados por e-mail." />
     <section className="panel dashboard-filter-panel">
-      <div className="panel-heading"><div><h2>Filtros</h2><p>Os indicadores e tickets em aberto seguem os filtros selecionados.</p></div></div>
+      <div className="panel-heading"><div><h2>Filtros</h2><p>Todos os indicadores e gráficos seguem o motorista e o período selecionados.</p></div></div>
       <div className="filter-fields dashboard-filters">
         <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label>
         <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
@@ -1146,7 +1135,9 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
       <Metric icon={ClipboardList} label="Total de fretes" value={summary.count.toLocaleString('pt-BR')} tint="blue" foot="No período selecionado" />
       <Metric icon={Truck} label="Peso transportado" value={formatWeight(summary.weight)} tint="violet" foot="Somado no período" />
       <Metric icon={BadgeDollarSign} label="Valor total" value={money(summary.amount)} tint="green" foot="Líquido após descontos" />
-      <Metric icon={ClipboardList} label="Tickets em aberto" value={openTickets.length.toLocaleString('pt-BR')} tint="amber" foot={`${money(openTickets.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))} aguardando fechamento`} />
+      <Metric icon={ClipboardList} label="Tickets em aberto" value={summary.open.count.toLocaleString('pt-BR')} tint="amber" foot={`${money(summary.open.amount)} aguardando fechamento`} />
+      <Metric icon={FileText} label="Fechados aguardando envio" value={summary.pending.count.toLocaleString('pt-BR')} tint="violet" foot={`${money(summary.pending.amount)} em tickets para solicitar por e-mail`} />
+      <Metric icon={Check} label="Solicitados por e-mail" value={summary.sent.count.toLocaleString('pt-BR')} tint="green" foot={`${money(summary.sent.amount)} em tickets já solicitados`} />
     </section>
 
     <section className="dashboard-charts" aria-label="Gráficos do período">
@@ -1160,12 +1151,7 @@ function Dashboard({ tickets, drivers: driverRecords, goTo, onView, onEdit }) {
       </div>
     </section>
 
-    <section className="panel recent-panel dashboard-recent-panel">
-      <div className="panel-heading dashboard-recent-heading"><div><h2>Tickets em aberto</h2><p>{openTickets.length.toLocaleString('pt-BR')} aguardando fechamento no período filtrado</p></div><button className="text-button" onClick={() => goTo('tickets')}>Ver todos <ArrowUpRight size={15} /></button></div>
-      <div className="open-ticket-toolbar"><label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label><span>Segue o período selecionado nos filtros do painel.</span></div>
-      <OpenTicketTotals tickets={openTickets} />
-      {openTickets.length ? <TicketTable tickets={openTickets} onView={onView} onEdit={onEdit} /> : <div className="empty-state">Nenhum ticket em aberto para este período.</div>}
-    </section>
+
   </>;
 }
 

@@ -272,3 +272,7 @@
 /* Read the full-size proof by scrolling the dialog, with no nested viewer. */
 .modal-backdrop > .ticket-detail-modal { width: min(100%, 1040px); height: auto; max-width: 1040px; }
 .ticket-detail-modal .ticket-detail-preview.image { max-height: none; height: auto; }
+
+@media (min-width: 801px) {
+  .metrics-grid.dashboard-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
