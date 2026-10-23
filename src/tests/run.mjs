@@ -13,3 +13,4 @@ import './history-search.test.mjs';
 
 import './dashboard-summary.test.mjs';
 import './outlook-package.test.mjs';
+import './outlook-helper.test.mjs';

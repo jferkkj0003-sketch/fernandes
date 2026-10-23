@@ -18,6 +18,7 @@ import DownloadPreferences from './DownloadPreferences';
 import ClosureEmailPreferences from './ClosureEmailPreferences';
 import ClosureOutlookModal from './ClosureOutlookModal';
 import { buildOutlookPackage } from './lib/outlook-package';
+import { startOutlookHelper } from './lib/outlook-helper';
 import History from './History';
 import { downloadPreferences } from './lib/downloads';
 
@@ -526,7 +527,14 @@ export default function App() {
     setPage('tickets');
   }
 
-  async function prepareClosureEmail(closure, message) {
+  async function prepareClosureEmail(closure, message, mode = 'helper') {
+    if (mode === 'helper') {
+      // Launch while the click still carries browser user activation.
+      const helper = startOutlookHelper();
+      await helper.ready();
+      const pdf = await buildClosurePdf(closure);
+      return helper.compose({ pdf, filename: pdfFilename(closure), ...message });
+    }
     const directory = await downloadPreferences.prepare();
     const pdf = await buildClosurePdf(closure);
     const archive = await buildOutlookPackage({ pdf, filename: pdfFilename(closure), ...message });
