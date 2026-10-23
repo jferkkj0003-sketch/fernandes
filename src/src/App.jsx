@@ -279,9 +279,10 @@ export default function App() {
   const [cloudDataReady, setCloudDataReady] = useState(!cloudConfigured);
   const [scanPrefetchProgress, setScanPrefetchProgress] = useState(null);
   const [cloudLoadError, setCloudLoadError] = useState('');
-  const [mobileNav, setMobileNav] = useState(false);
-  const menuButtonRef = useRef(null);
-  const sidebarRef = useRef(null);
+  const [mobileNav, setMobileNav] = useState(() => {
+    const saved = window.localStorage.getItem('dde-fretes-navigation-open');
+    return saved === null ? window.matchMedia('(min-width: 801px)').matches : saved === 'true';
+  });
   const [editingTicket, setEditingTicket] = useState(null);
   const [viewingTicket, setViewingTicket] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -301,7 +302,7 @@ export default function App() {
   const [driverActiveBusy, setDriverActiveBusy] = useState(false);
   const [closureToEdit, setClosureToEdit] = useState(null);
   const scanPrefetchSignature = useRef('');
-  const pageScrollLocked = Boolean(mobileNav || editingTicket || viewingTicket || accountOpen || closureToDelete || ticketToDelete || driverToUpdate || closureToEdit);
+  const pageScrollLocked = Boolean( editingTicket || viewingTicket || accountOpen || closureToDelete || ticketToDelete || driverToUpdate || closureToEdit);
 
   useEffect(() => {
     if (!pageScrollLocked) return undefined;
@@ -317,28 +318,7 @@ export default function App() {
   }, [pageScrollLocked]);
 
   useEffect(() => {
-    if (!mobileNav) return undefined;
-    const sidebar = sidebarRef.current;
-    const controls = () => [...(sidebar?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]') || [])];
-    const focusFrame = window.requestAnimationFrame(() => {
-      (sidebar?.querySelector('.nav-item.active') || controls()[0])?.focus();
-    });
-    const handleMenuKey = (event) => {
-      if (event.key === 'Escape') { event.preventDefault(); setMobileNav(false); }
-      if (event.key !== 'Tab') return;
-      const items = controls();
-      const first = items[0], last = items.at(-1);
-      if (!first) return;
-      if (!sidebar?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); return; }
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', handleMenuKey);
-    return () => {
-      document.removeEventListener('keydown', handleMenuKey);
-      window.cancelAnimationFrame(focusFrame);
-      menuButtonRef.current?.focus();
-    };
+    window.localStorage.setItem('dde-fretes-navigation-open', String(mobileNav));
   }, [mobileNav]);
 
 
@@ -954,7 +934,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-frame">
+    <div className={`app-frame ${mobileNav ? 'navigation-open' : ''}`}>
       {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
       {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
       {authReady && showLogin ? (
@@ -1004,7 +984,7 @@ export default function App() {
         </main>
       ) : authReady && !showLogin && (!cloudConfigured || cloudDataReady) ? (
         <>
-          <aside ref={sidebarRef} id="main-navigation" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`} inert={!mobileNav} aria-hidden={!mobileNav} role={mobileNav ? 'dialog' : undefined} aria-modal={mobileNav ? true : undefined} aria-label="Menu de navegação">
+          <aside id="main-navigation" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`} inert={!mobileNav} aria-hidden={!mobileNav} aria-label="Menu de navegação">
             <div className="brand-row">
               <img className="brand-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
               <button className="icon-button close-mobile" aria-label="Fechar menu" onClick={() => setMobileNav(false)}><X size={18} /></button>
@@ -1012,22 +992,22 @@ export default function App() {
             <div className="workspace-label">MENU PRINCIPAL</div>
             <nav className="nav-list" aria-label="Menu principal">
               {navItems.filter(({ id }) => id !== 'motoristas' || isAdmin).map(({ id, label, icon: Icon }) => (
-                <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => { setPage(id); setMobileNav(false); }}>
+                <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => setPage(id)}>
                   <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{id === 'tickets' && <span className="nav-count">{tickets.filter((ticket) => ticket.status === 'Aberto').length}</span>}
                 </button>
               ))}
             </nav>
             <div className="sidebar-spacer" />
             <div className="sidebar-help"><div className="help-icon"><CircleHelp size={17} /></div><div><strong>Precisa de ajuda?</strong><span>Consulte seus lançamentos</span></div><ArrowUpRight size={15} /></div>
-            <div className="profile-row"><button className="profile-open" onClick={() => { setMobileNav(false); setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Josué').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Josué'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
+            <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Josué').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Josué'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
           </aside>
 
-          {mobileNav && <button className="mobile-backdrop" aria-label="Fechar menu" onClick={() => setMobileNav(false)} />}
 
-          <main className="main-area" inert={mobileNav}>
+
+          <main className="main-area">
             <header className="topbar">
               <div className="topbar-left">
-                <button ref={menuButtonRef} className="icon-button mobile-menu" aria-label="Abrir menu" aria-expanded={mobileNav} aria-controls="main-navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
+                <button className="icon-button mobile-menu" aria-label={mobileNav ? 'Recolher menu' : 'Abrir menu'} aria-expanded={mobileNav} aria-controls="main-navigation" onClick={() => setMobileNav((open) => !open)}><Menu size={20} /></button>
                 <div className="breadcrumb"><span className="breadcrumb-root">Operação <span>/</span></span><strong>{navItems.find((item) => item.id === page)?.label || 'Início'}</strong></div>
               </div>
               <div className="topbar-right">
@@ -1075,7 +1055,7 @@ function formatDashboardWeight(value) {
     : `${weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
 }
 
-function Dashboard({ tickets, drivers: driverRecords }) {
+function Dashboard({ tickets, drivers: driverRecords, goTo }) {
   const [driverFilter, setDriverFilter] = useState('Todos');
   const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
   const [endDate, setEndDate] = useState(localToday);
@@ -1134,7 +1114,7 @@ function Dashboard({ tickets, drivers: driverRecords }) {
   const formatWeight = formatDashboardWeight;
 
   return <>
-    <PageHeading eyebrow="VISÃO GERAL" title="Painel de controle" subtitle="Consulte os fretes em aberto, fechados e solicitados por e-mail." />
+    <PageHeading eyebrow="VISÃO GERAL" title="Painel de controle" subtitle="Consulte os fretes em aberto, fechados e solicitados por e-mail." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
     <section className="panel dashboard-filter-panel">
       <div className="panel-heading"><div><h2>Filtros</h2><p>Todos os indicadores e gráficos seguem o motorista e o período selecionados.</p></div></div>
       <div className="filter-fields dashboard-filters">
