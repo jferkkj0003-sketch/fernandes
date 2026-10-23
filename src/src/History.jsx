@@ -25,8 +25,8 @@ export default function History({ closures, drivers, tickets, canDelete, onMarkR
     <section className="panel history-filter-panel" aria-label="Filtros do histórico">
       <div className="panel-heading"><div><h2>Pesquisar no histórico</h2><p>As datas consideram o dia de cada ticket, inclusive dentro de um fechamento maior.</p></div><button type="button" className="button secondary small-button" disabled={!active} onClick={clear}>Limpar filtros</button></div>
       <div className="history-filter-grid">
-        <label className="history-search-field">Pesquisar<div><Search size={17}/><input type="search" value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Motorista, número do ticket ou fechamento" /></div></label>
         <label>Motorista<select value={driver} onChange={(event)=>setDriver(event.target.value)}><option value="">Todos os motoristas</option>{options.map((option)=><option key={option.key} value={option.key}>{option.name}{!option.active ? ' (inativo)' : ''}</option>)}</select></label>
+        <label className="history-search-field">Ticket<div><Search size={17}/><input type="search" value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Número do ticket" /></div></label>
         <label>Data inicial<input type="date" value={start} onInput={(event)=>setStart(event.currentTarget.value)} onChange={(event)=>setStart(event.target.value)}/></label>
         <label>Data final<input type="date" value={end} onInput={(event)=>setEnd(event.currentTarget.value)} onChange={(event)=>setEnd(event.target.value)}/></label>
       </div>
