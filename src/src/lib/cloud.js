@@ -236,7 +236,7 @@ export async function saveCloudTicket(ticket, driverId, scanFile = null) {
   const { data, error } = await supabase.from('tickets').insert({
     id: ticketId, number: ticket.number, date: ticket.dateISO, driver_id: driverId, plate: ticket.plate,
     weight: ticket.weight, gross: ticket.gross, discount: ticket.discount, note: ticket.note, status: 'Aberto',
-    scan_path: scanPath, scan_name: scanFile?.name || null, scan_type: preparedFile?.type || null, scan_size: preparedFile?.size || null,
+    scan_path: scanPath, scan_name: scanFile?.name || null, scan_type: preparedFile?.type || null, scan_size: preparedFile?.size || null, preview_id: ticket.previewId || null,
   }).select('*, driver:drivers(name)').single();
   if (error) {
     if (scanPath) await supabase.storage.from(scanBucket).remove([scanPath]);
@@ -433,17 +433,19 @@ export async function revokeDashboardShare() {
 export async function loadSharedDashboard(token) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
   const tokenHash = Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, '0')).join('');
-  const [dashboardResult, driverResult, paymentResult] = await Promise.all([
+  const [dashboardResult, driverResult, paymentResult, previewResult] = await Promise.all([
     supabase.rpc('get_shared_dashboard', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_driver_summary', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_closure_payments', { token_hash_input: tokenHash }),
+    supabase.rpc('get_shared_freight_previews', { token_hash_input: tokenHash }),
   ]);
-  const error = dashboardResult.error || driverResult.error || paymentResult.error;
+  const error = dashboardResult.error || driverResult.error || paymentResult.error || previewResult.error;
   if (error) throw error;
   return {
     ...dashboardResult.data,
     drivers_by_day: driverResult.data?.drivers_by_day || [],
     closure_payments: paymentResult.data?.closure_payments || [],
+    freight_previews: previewResult.data || [],
   };
 }
 

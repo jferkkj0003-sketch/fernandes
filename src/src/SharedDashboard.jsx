@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, ClipboardList, CreditCard, Mail, FolderCheck, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import OverviewCharts from './OverviewCharts';
+import FreightForecast from './FreightForecast';
 import { requestArchiveAt } from './lib/request-cycle';
 import { consultationSummary } from './lib/consultation';
 
@@ -51,7 +52,8 @@ export default function SharedDashboard({ token }) {
     const visible = () => { if (document.visibilityState === 'visible') update(); };
     window.addEventListener('focus', update);
     document.addEventListener('visibilitychange', visible);
-    return () => { window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', visible); };
+    const interval = window.setInterval(() => { if (document.visibilityState === 'visible') update(); }, 30000);
+    return () => { window.clearInterval(interval); window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', visible); };
   }, [token]);
   useEffect(() => {
     const timestamp = now.getTime();
@@ -100,6 +102,7 @@ export default function SharedDashboard({ token }) {
       {range === 'custom' && <div className="shared-custom-dates"><label>De<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
       <label className="shared-driver-select"><Truck size={15} /><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos os motoristas</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
     </section>
+    <FreightForecast data={data} driver={driverFilter} />
 
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
@@ -114,7 +117,7 @@ export default function SharedDashboard({ token }) {
         <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral. Os gráficos abaixo mostram o movimento total dos filtros selecionados.</p>
         <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
       </>}
-    <footer className="shared-footer">Ciclo atualizado automaticamente · Dados recarregados ao abrir ou retornar ao painel · Acesso somente para consulta</footer>
+    <footer className="shared-footer">Ciclo atualizado automaticamente · Dados atualizados a cada 30 segundos enquanto o painel estiver aberto · Acesso somente para consulta</footer>
   </main>;
 }
 
