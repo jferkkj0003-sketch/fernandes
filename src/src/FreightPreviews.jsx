@@ -11,6 +11,7 @@ export default function FreightPreviews({ drivers, onSelect, refreshKey, isAdmin
   const [busy, setBusy] = useState(false);
   const [driver, setDriver] = useState('');
   const [amount, setAmount] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const active = drivers.filter(d => d.active !== false && d.id);
   async function refresh() {
     const { data, error } = await supabase.from('freight_previews').select('*, driver:drivers(name)').is('cancelled_at', null).is('ticket_id', null).order('payment_date');
@@ -33,7 +34,8 @@ export default function FreightPreviews({ drivers, onSelect, refreshKey, isAdmin
     setMessage(error ? `Não foi possível cancelar: ${error.message}` : 'Prévia cancelada.'); await refresh(); setBusy(false);
   }
   if (!supabase) return null;
-  return <section className="panel form-panel"><div className="panel-heading"><div><h2>Prévia de viagem sem ticket</h2><p>Informe a viagem e o pagamento previsto. O ticket poderá ser vinculado depois.</p></div></div>
+  return <section className="panel form-panel"><div className="panel-heading"><div><h2>Prévia de viagem sem ticket</h2><p>Informe a viagem e o pagamento previsto. O ticket poderá ser vinculado depois.</p></div><button type="button" className="button secondary" aria-expanded={expanded} aria-controls="freight-previews-content" onClick={() => setExpanded(value => !value)}>{expanded ? 'Ocultar prévias' : 'Abrir prévias'}</button></div>
+    <div id="freight-previews-content" hidden={!expanded}>
     <form className="ticket-form" onSubmit={save}>
       <label>Data do carregamento *<input name="loading_date" type="date" defaultValue={today()} required /></label>
       <label>Pagamento previsto *<input name="payment_date" type="date" defaultValue={nextFriday()} required /></label>
@@ -43,5 +45,6 @@ export default function FreightPreviews({ drivers, onSelect, refreshKey, isAdmin
       <div className="form-actions"><span>{message}</span><button className="button primary" disabled={busy}>Salvar prévia</button></div>
     </form>
     <div className="table-wrap"><table><thead><tr><th>CARREGAMENTO</th><th>MOTORISTA</th><th>PAGAMENTO</th><th>VALOR</th><th>AÇÃO</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{row.loading_date.split('-').reverse().join('/')}</td><td>{row.driver?.name}</td><td>{row.payment_date.split('-').reverse().join('/')}</td><td>{money(row.amount)}</td><td><button type="button" className="button secondary small-button" onClick={() => onSelect(row)}>Vincular ticket</button> {isAdmin && <button type="button" className="row-action danger-action" disabled={busy} onClick={() => cancel(row)}>Cancelar</button>}</td></tr>)}{!rows.length && <tr><td colSpan="5">Nenhuma prévia aguardando ticket.</td></tr>}</tbody></table></div>
+    </div>
   </section>;
 }
