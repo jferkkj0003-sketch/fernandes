@@ -102,7 +102,6 @@ export default function SharedDashboard({ token }) {
       {range === 'custom' && <div className="shared-custom-dates"><label>De<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
       <label className="shared-driver-select"><Truck size={15} /><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos os motoristas</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
     </section>
-    <FreightForecast data={data} driver={driverFilter} />
 
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
@@ -115,6 +114,7 @@ export default function SharedDashboard({ token }) {
           <SummaryCard icon={CreditCard} title="Total geral" description="Todo o movimento do período, incluindo o histórico" values={summary.total} tint="green" />
         </section>
         <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral. Os gráficos abaixo mostram o movimento total dos filtros selecionados.</p>
+        <FreightForecast data={data} driver={driverFilter} />
         <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
       </>}
     <footer className="shared-footer">Ciclo atualizado automaticamente · Dados atualizados a cada 30 segundos enquanto o painel estiver aberto · Acesso somente para consulta</footer>
