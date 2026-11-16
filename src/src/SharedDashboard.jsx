@@ -82,7 +82,7 @@ export default function SharedDashboard({ token }) {
     return { start: '', end: '' };
   }, [range, month, customStart, customEnd, now.toDateString()]);
 
-  const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
+  const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || []), ...(data?.freight_previews || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
   const summary = useMemo(() => consultationSummary(data, period, driverFilter, now), [data, period, driverFilter, now]);
 
@@ -114,7 +114,7 @@ export default function SharedDashboard({ token }) {
           <SummaryCard icon={CreditCard} title="Total geral" description="Todo o movimento do período, incluindo o histórico" values={summary.total} tint="green" />
         </section>
         <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral. Os gráficos abaixo mostram o movimento total dos filtros selecionados.</p>
-        <FreightForecast data={data} driver={driverFilter} />
+        <FreightForecast data={data} driver={driverFilter} period={period} />
         <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
       </>}
     <footer className="shared-footer">Ciclo atualizado automaticamente · Dados atualizados a cada 30 segundos enquanto o painel estiver aberto · Acesso somente para consulta</footer>
