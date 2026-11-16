@@ -6,11 +6,12 @@ import {
   Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import {
-  clearCloudTicketScanCache, cloudConfigured, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, setCloudDriverActive, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
+  clearCloudTicketScanCache, cloudConfigured, supabase, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, setCloudDriverActive, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
   onAuthChange, requestCloudClosure, saveCloudDriver, saveCloudTicket,
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
+import FreightPreviews from './FreightPreviews';
 import { summarizeDashboardTickets } from './lib/dashboard-summary';
 import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
@@ -509,6 +510,7 @@ export default function App() {
       gross: Number(form.get('gross')) || 0,
       discount: Number(form.get('discount')) || 0,
       note: String(form.get('note') || '').trim(),
+      previewId: String(form.get('previewId') || '') || null,
       status: 'Aberto',
     };
     if (cloudConfigured && sessionUser) {
@@ -521,6 +523,7 @@ export default function App() {
         setTickets((current) => [savedTicket, ...current.filter((item) => item.id !== savedTicket.id)]);
         formElement.reset();
         setNotice(`Ticket ${ticket.number} e comprovante salvos na nuvem.`);
+        return true;
       } catch (error) {
         setNotice(error.code === '23505' ? `O ticket ${ticketNumber} já existe na nuvem.` : `Não foi possível salvar o ticket: ${error.message || 'tente novamente'}`);
       } finally { setCloudBusy(false); setSavingTicket(false); }
@@ -1055,7 +1058,7 @@ export default function App() {
               {notice && <div className="notice"><span className="status-dot amber" />{notice}<button className="notice-close" onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={16} /></button></div>}
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
-              {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} />}
+              {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} isAdmin={isAdmin} />}
               {page === 'fechamentos' && <Closures user={sessionUser} onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
               {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
@@ -1205,22 +1208,35 @@ function Metric({ icon: Icon, label, value, tint, foot }) {
   return <div className="metric-card"><div className={`metric-icon ${tint}`}><Icon size={19} strokeWidth={1.9} /></div><span className="metric-label">{label}</span><strong className="metric-value">{value}</strong><span className="metric-foot">{foot}</span></div>;
 }
 
-function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, canDeleteTicket, saving }) {
+function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, canDeleteTicket, saving, isAdmin }) {
   const [scanName, setScanName] = useState('');
+  const [selectedPreview, setSelectedPreview] = useState(null);
+  const [previewRefresh, setPreviewRefresh] = useState(0);
+  const ticketForm = useRef(null);
   const [ticketDriver, setTicketDriver] = useState('');
   const options = driverOptions(drivers, tickets);
   const activeDrivers = drivers.filter((driver) => driver.active !== false);
   const listedTickets = tickets.filter((ticket) => !ticketDriver || recordDriverKey(ticket) === ticketDriver);
   const handleTicketSubmit = async (event) => {
+    event.preventDefault();
     const form = event.currentTarget;
-    await onSave(event);
+    if (cloudConfigured && !selectedPreview) {
+      const { data, error } = await supabase.from('freight_previews').select('id').eq('driver_id', form.elements.driver.value).eq('loading_date', form.elements.date.value).is('ticket_id', null).is('cancelled_at', null).limit(1);
+      if (error) { window.alert('Não foi possível conferir as prévias. Tente novamente antes de registrar o ticket.'); return; }
+      if (data?.length && !window.confirm('Existe uma prévia para este motorista e esta data. Se for a mesma viagem, cancele e clique em Vincular ticket na prévia. Registrar assim uma viagem diferente?')) return;
+    }
+    const saved = await onSave({ preventDefault() {}, currentTarget: form });
+    if (saved) { setSelectedPreview(null); setPreviewRefresh(value => value + 1); }
     if (!form.elements.scan.files.length && !form.elements.cameraScan.files.length) setScanName('');
   };
   return <>
     <PageHeading eyebrow="LANÇAMENTOS" title="Tickets" subtitle="Registre os fretes e acompanhe o andamento de cada ticket." />
+    <FreightPreviews drivers={drivers} isAdmin={isAdmin} refreshKey={previewRefresh} onSelect={(preview) => { const d = drivers.find(item => item.id === preview.driver_id && item.active !== false); if (!d) { window.alert('O motorista desta prévia está inativo. Peça ao administrador para reativá-lo antes de vincular o ticket.'); return; } setSelectedPreview(preview); const form = ticketForm.current; form.elements.date.value = preview.loading_date; form.elements.driver.value = driverKey(d); form.elements.plate.value = d.plate || ''; form.elements.gross.value = preview.amount; form.scrollIntoView({ behavior: 'smooth' }); }} />
     <section className="panel form-panel">
       <div className="panel-heading form-heading"><div><h2><span className="heading-icon"><Plus size={17} /></span> Registrar ticket</h2><p>Os campos com * são obrigatórios.</p></div><span className="form-step">NOVO LANÇAMENTO</span></div>
-      <form className="ticket-form" onSubmit={handleTicketSubmit}>
+      <form className="ticket-form" ref={ticketForm} onSubmit={handleTicketSubmit}>
+        <input type="hidden" name="previewId" value={selectedPreview?.id || ''} />
+        {selectedPreview && <div className="wide-field notice">Vinculando à prévia de {selectedPreview.driver?.name}, carregamento em {selectedPreview.loading_date.split('-').reverse().join('/')}. <button type="button" onClick={() => setSelectedPreview(null)}>Desvincular</button></div>}
         <label>Data *<input type="date" name="date" defaultValue={localToday()} required /></label>
         <label>Nº do ticket *<input name="number" placeholder="Ex.: 1465" required /></label>
         <label>Motorista *<select name="driver" defaultValue="" required onChange={(event) => { const selected = activeDrivers.find((driver) => driverKey(driver) === event.target.value); event.currentTarget.form.elements.plate.value = selected?.plate || ''; event.currentTarget.form.elements.gross.value = Number(selected?.defaultFare ?? 1000).toFixed(2); }}><option value="" disabled>Selecione…</option>{activeDrivers.map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}</option>)}</select></label>
