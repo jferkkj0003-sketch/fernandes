@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Mail, Settings2, Check } from 'lucide-react';
 import { cloudConfigured, saveClosureEmailRecipients } from './lib/cloud';
 import { normalizeRecipients } from './lib/email-recipients';
-import './closure-email.css';
 
 export default function ClosureEmailPreferences({ user }) {
   const stored = user?.user_metadata?.closure_email_recipients;

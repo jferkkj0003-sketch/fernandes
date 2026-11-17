@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, Truck, UserRound, UsersRound, Wallet } from 'lucide-react';
 import { freightForecast } from './lib/freight-forecast';
-import './freight-forecast.css';
 const money = n => Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const nextFriday = () => { const date = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Manaus' }) + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + (5 - date.getUTCDay() + 7) % 7); return date.toISOString().slice(0,10); };
 export default function FreightForecast({ data, driver, period }) {

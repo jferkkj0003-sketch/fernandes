@@ -20,7 +20,7 @@ function SummaryCard({ icon: Icon, title, description, values, tint }) {
 }
 
 export default function SharedDashboard({ token }) {
-  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);

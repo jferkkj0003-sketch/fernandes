@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
-  ArrowDownToLine, ArrowUpRight, BadgeDollarSign, Bell, Check, ChevronDown,
-  CircleHelp, ClipboardList, CreditCard, Eye, LayoutDashboard, Menu, Plus, Pencil,
+  ArrowDownToLine, ArrowUpRight, BadgeDollarSign, Check, ChevronDown,
+  CircleHelp, ClipboardList, CreditCard, Eye, LayoutDashboard, Plus, Pencil,
   Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import {
@@ -272,7 +272,7 @@ async function getClosureConsultationLink() {
 
 export default function App() {
   const [page, setPage] = useState('painel');
-  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
   const [tickets, setTickets] = useState(initialTickets);
   const [drivers, setDrivers] = useState(initialDrivers);
   const [query, setQuery] = useState('');
@@ -291,10 +291,6 @@ export default function App() {
   const [cloudDataReady, setCloudDataReady] = useState(!cloudConfigured);
   const [scanPrefetchProgress, setScanPrefetchProgress] = useState(null);
   const [cloudLoadError, setCloudLoadError] = useState('');
-  const [mobileNav, setMobileNav] = useState(() => {
-    const saved = window.localStorage.getItem('dde-fretes-navigation-open');
-    return saved === null ? window.matchMedia('(min-width: 801px)').matches : saved === 'true';
-  });
   const [editingTicket, setEditingTicket] = useState(null);
   const [viewingTicket, setViewingTicket] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -329,10 +325,6 @@ export default function App() {
       document.body.style.overflow = previousBodyOverflow;
     };
   }, [pageScrollLocked]);
-
-  useEffect(() => {
-    window.localStorage.setItem('dde-fretes-navigation-open', String(mobileNav));
-  }, [mobileNav]);
 
 
 
@@ -969,7 +961,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-frame ${mobileNav ? 'navigation-open' : ''}`}>
+    <div className="app-frame">
       {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
       {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
       {authReady && showLogin ? (
@@ -1019,10 +1011,9 @@ export default function App() {
         </main>
       ) : authReady && !showLogin && (!cloudConfigured || cloudDataReady) ? (
         <>
-          <aside id="main-navigation" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`} inert={!mobileNav} aria-hidden={!mobileNav} aria-label="Menu de navegação">
+          <aside id="main-navigation" className="sidebar" aria-label="Menu de navegação">
             <div className="brand-row">
               <img className="brand-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
-              <button className="icon-button close-mobile" aria-label="Fechar menu" onClick={() => setMobileNav(false)}><X size={18} /></button>
             </div>
             <div className="workspace-label">MENU PRINCIPAL</div>
             <nav className="nav-list" aria-label="Menu principal">
@@ -1033,8 +1024,7 @@ export default function App() {
               ))}
             </nav>
             <div className="sidebar-spacer" />
-            <div className="sidebar-help"><div className="help-icon"><CircleHelp size={17} /></div><div><strong>Precisa de ajuda?</strong><span>Consulte seus lançamentos</span></div><ArrowUpRight size={15} /></div>
-            <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Josué').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Josué'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
+            <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Usuário').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Usuário'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
           </aside>
 
 
@@ -1042,15 +1032,14 @@ export default function App() {
           <main className="main-area">
             <header className="topbar">
               <div className="topbar-left">
-                <button className="icon-button mobile-menu" aria-label={mobileNav ? 'Recolher menu' : 'Abrir menu'} aria-expanded={mobileNav} aria-controls="main-navigation" onClick={() => setMobileNav((open) => !open)}><Menu size={20} /></button>
+                <img className="topbar-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
                 <div className="breadcrumb"><span className="breadcrumb-root">Operação <span>/</span></span><strong>{navItems.find((item) => item.id === page)?.label || 'Início'}</strong></div>
               </div>
               <div className="topbar-right">
                 <span className={`prototype-pill ${syncState}`}><span className="status-dot amber" /><span className="sync-label">{syncState === 'online' ? 'Nuvem conectada' : syncState === 'connecting' ? 'Conectando à nuvem' : syncState === 'error' ? 'Erro na nuvem' : 'Demonstração local'}</span></span>
                 {scanPrefetchProgress && <span className="scan-prefetch-pill" role="status"><RefreshCw size={14} aria-hidden="true" />Sincronizando</span>}
                 <button className="icon-button theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
-                <button className="icon-button notification-button" aria-label="Notificações"><Bell size={18} /><i /></button>
-                <button className="top-user" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Abrir minha conta"><div className="avatar small">{(sessionUser?.user_metadata?.display_name || 'Josué').slice(0, 1).toUpperCase()}</div><span>{sessionUser?.user_metadata?.display_name || 'Josué'}</span></button>
+                <button className="top-user" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Abrir minha conta"><div className="avatar small">{(sessionUser?.user_metadata?.display_name || 'Usuário').slice(0, 1).toUpperCase()}</div><span>{sessionUser?.user_metadata?.display_name || 'Usuário'}</span></button>
               </div>
             </header>
 
@@ -1214,6 +1203,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
   const [previewRefresh, setPreviewRefresh] = useState(0);
   const ticketForm = useRef(null);
   const [ticketDriver, setTicketDriver] = useState('');
+  const [formOpen, setFormOpen] = useState(() => window.matchMedia('(min-width: 801px)').matches);
   const options = driverOptions(drivers, tickets);
   const activeDrivers = drivers.filter((driver) => driver.active !== false);
   const listedTickets = tickets.filter((ticket) => !ticketDriver || recordDriverKey(ticket) === ticketDriver);
@@ -1226,13 +1216,24 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
       if (data?.length && !window.confirm('Existe uma prévia para este motorista e esta data. Se for a mesma viagem, cancele e clique em Vincular ticket na prévia. Registrar assim uma viagem diferente?')) return;
     }
     const saved = await onSave({ preventDefault() {}, currentTarget: form });
-    if (saved) { setSelectedPreview(null); setPreviewRefresh(value => value + 1); }
+    if (saved) { setSelectedPreview(null); setPreviewRefresh(value => value + 1); if (!window.matchMedia('(min-width: 801px)').matches) setFormOpen(false); }
     if (!form.elements.scan.files.length && !form.elements.cameraScan.files.length) setScanName('');
+  };
+  const exportCsv = () => {
+    if (!listedTickets.length) { window.alert('Não há tickets para exportar com esse filtro.'); return; }
+    const cell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = [['Data', 'Ticket', 'Motorista', 'Placa', 'Peso (kg)', 'Bruto', 'Desconto', 'Líquido', 'Status', 'Observação'],
+      ...listedTickets.map((t) => [t.date, t.number, t.driver, t.plate, t.weight, t.gross, t.discount, t.gross - t.discount, t.status, t.note || ''])];
+    const csv = '﻿' + rows.map((row) => row.map(cell).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `tickets-${localToday()}.csv`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <>
     <PageHeading eyebrow="LANÇAMENTOS" title="Tickets" subtitle="Registre os fretes e acompanhe o andamento de cada ticket." />
-    <section className="panel form-panel">
-      <div className="panel-heading form-heading"><div><h2><span className="heading-icon"><Plus size={17} /></span> Registrar ticket</h2><p>Os campos com * são obrigatórios.</p></div><span className="form-step">NOVO LANÇAMENTO</span></div>
+    <section className={`panel form-panel ${formOpen ? '' : 'collapsed'}`}>
+      <div className="panel-heading form-heading"><div><h2><span className="heading-icon"><Plus size={17} /></span> Registrar ticket</h2><p>Os campos com * são obrigatórios.</p></div><span className="form-step">NOVO LANÇAMENTO</span><button type="button" className="button secondary small-button form-toggle" aria-expanded={formOpen} onClick={() => setFormOpen((open) => !open)}>{formOpen ? 'Recolher' : 'Abrir'}</button></div>
       <form className="ticket-form" ref={ticketForm} onSubmit={handleTicketSubmit}>
         <input type="hidden" name="previewId" value={selectedPreview?.id || ''} />
         {selectedPreview && <div className="wide-field notice">Vinculando à prévia de {selectedPreview.driver?.name}, carregamento em {selectedPreview.loading_date.split('-').reverse().join('/')}. <button type="button" onClick={() => setSelectedPreview(null)}>Desvincular</button></div>}
@@ -1258,7 +1259,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
     </section>
     <FreightPreviews drivers={drivers} isAdmin={isAdmin} refreshKey={previewRefresh} onSelect={(preview) => { const d = drivers.find(item => item.id === preview.driver_id && item.active !== false); if (!d) { window.alert('O motorista desta prévia está inativo. Peça ao administrador para reativá-lo antes de vincular o ticket.'); return; } setSelectedPreview(preview); const form = ticketForm.current; form.elements.date.value = preview.loading_date; form.elements.driver.value = driverKey(d); form.elements.plate.value = d.plate || ''; form.elements.gross.value = preview.amount; form.scrollIntoView({ behavior: 'smooth' }); }} />
     <section className="panel list-panel">
-      <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={() => window.alert('A exportação será conectada em uma etapa futura.')}><ArrowDownToLine size={16} /> Exportar</button></div>
+      <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={exportCsv}><ArrowDownToLine size={16} /> Exportar</button></div>
       <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select ticket-driver-filter" aria-label="Filtrar por motorista" value={ticketDriver} onChange={(event) => setTicketDriver(event.target.value)}><option value="">Todos os motoristas</option>{options.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select><select className="filter-select" aria-label="Filtrar por status" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
       <OpenTicketTotals tickets={listedTickets} filtered={filter !== 'Aberto'} />
       <TicketTable tickets={listedTickets} onView={onView} onEdit={onEdit} onDelete={onDelete} canDeleteTicket={canDeleteTicket} />
@@ -1559,7 +1560,7 @@ function OperatorAccessManager({ isAdmin }) {
 }
 
 function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
-  const displayName = user?.user_metadata?.display_name || 'Josué';
+  const displayName = user?.user_metadata?.display_name || 'Usuário';
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="edit-modal account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
       <div className="panel-heading"><div><p className="eyebrow">PREFERÊNCIAS</p><h2 id="account-title">Minha conta</h2><p>Altere seu nome, usuário de acesso ou senha.</p></div><button className="icon-button" aria-label="Fechar" onClick={onClose}><X size={18} /></button></div>

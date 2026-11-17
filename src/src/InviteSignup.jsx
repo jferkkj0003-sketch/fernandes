@@ -3,7 +3,7 @@ import { Check, Moon, Sun } from 'lucide-react';
 import { cloudConfigured, redeemOperatorInvite } from './lib/cloud';
 
 export default function InviteSignup({ token }) {
-  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [complete, setComplete] = useState(false);
