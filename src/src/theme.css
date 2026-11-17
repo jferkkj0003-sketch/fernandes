@@ -633,3 +633,26 @@ input[type="date"], input[type="month"] { min-width: 0; max-width: 100%; -webkit
   .dash-driver-total { width: 100%; text-align: left; border-left: 0; border-top: 1px solid var(--line); padding: 10px 0 0; display: flex; justify-content: space-between; align-items: baseline; }
   .dash-driver-total strong { font-size: 19px; }
 }
+
+/* consulta */
+.dash-paydate { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+.dash-paydate input { width: auto; min-height: 38px; }
+.dash-note, .consultation-cycle-note { margin-top: 12px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.shared-view-context { margin: 0 0 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.dash-charts { margin-top: 14px; }
+.dash-charts > summary { cursor: pointer; list-style: none; padding: 14px 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); font-weight: 700; }
+.dash-charts[open] > summary { margin-bottom: 14px; }
+.dash-charts .overview-charts-grid { margin-top: 0; }
+.shared-dashboard .dash-kpis { margin-top: 0; }
+@media (max-width: 800px) {
+  .shared-dashboard { padding: 16px 14px 36px; }
+  .shared-header { margin-bottom: 16px; }
+  .shared-header img { width: 48px; }
+  .dash-paydate { width: 100%; } .dash-paydate input { flex: 1; }
+  .dash-charts > summary { padding: 12px 14px; }
+}
+@media (max-width: 800px) {
+  .shared-dashboard .kpi-icon { display: none; }
+  .shared-dashboard .kpi-value { font-size: 20px; white-space: nowrap; }
+  .shared-header img { width: 56px; }
+}

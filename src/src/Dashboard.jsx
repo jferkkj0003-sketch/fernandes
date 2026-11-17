@@ -3,6 +3,7 @@ import { BadgeDollarSign, CalendarDays, ChevronRight, ClipboardList, Plus, Truck
 import { supabase } from './lib/cloud';
 import { driverOptions } from './lib/drivers';
 import { summarizeDriverPayments } from './lib/driver-payments';
+import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -39,7 +40,17 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     return () => { cancelled = true; };
   }, [tickets.length]);
 
-  const paidTicketIds = useMemo(() => new Set(closures.filter((closure) => closure.paidAt).flatMap((closure) => closure.ticketIds || [])), [closures]);
+  // Solicitação do ciclo atual (paga na sexta) ainda conta; ciclos encerrados e fechamentos pagos já foram quitados.
+  const paidTicketIds = useMemo(() => {
+    const now = Date.now();
+    const current = (closure) => {
+      if (closure.status !== 'Solicitado' || closure.paidAt) return false;
+      if (closure.end && closure.end < REQUESTS_TRACKING_START_DATE) return false;
+      const cutoff = requestArchiveAt(closure.sentAt);
+      return !cutoff || now < new Date(cutoff).getTime();
+    };
+    return new Set(closures.filter((closure) => closure.paidAt || (closure.status === 'Solicitado' && !current(closure))).flatMap((closure) => closure.ticketIds || []));
+  }, [closures]);
   const { drivers: rows, totals } = useMemo(() => invalidRange
     ? summarizeDriverPayments({ drivers: [], tickets: [], previews: [] })
     : summarizeDriverPayments({ tickets, previews, paidTicketIds, drivers, driverFilter, start: startDate, end: endDate }),
@@ -82,11 +93,11 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     </section>
 
     <section className="dash-pay" aria-label="Total a pagar">
-      <div className="dash-pay-main"><span className="dash-pay-icon"><Wallet size={28} strokeWidth={1.7} /></span><div><span className="dash-pay-label">Total a ser pago</span><strong className="dash-pay-value">{money(totals.payable)}</strong><small>{driverFilter === 'Todos' ? 'Todos os motoristas' : rows[0]?.name || 'Motorista'} · inclui prévias</small></div></div>
+      <div className="dash-pay-main"><span className="dash-pay-icon"><Wallet size={28} strokeWidth={1.7} /></span><div><span className="dash-pay-label">Total a ser pago</span><strong className="dash-pay-value">{money(totals.payable)}</strong><small>{driverFilter === 'Todos' ? 'Todos os motoristas' : rows[0]?.name || 'Motorista'} · inclui prévias{totals.paid ? ` · já pago antes: ${money(totals.paid)}` : ''}</small></div></div>
       <dl className="dash-pay-split">
         <div className="s-amber"><dt>Em aberto</dt><dd>{money(totals.open)}</dd></div>
         <div className="s-violet"><dt>Fechado</dt><dd>{money(totals.waiting)}</dd></div>
-        <div className="s-green"><dt>Solicitado</dt><dd>{money(totals.requested)}</dd></div>
+        <div className="s-green"><dt>Solicitado (semana)</dt><dd>{money(totals.requested)}</dd></div>
         <div className="s-blue"><dt>Prévia</dt><dd>{money(totals.preview)}</dd></div>
       </dl>
     </section>

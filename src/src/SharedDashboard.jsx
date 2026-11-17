@@ -11,12 +11,8 @@ const dateISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).p
 const monthISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const formatWeight = (value) => value === null ? 'Peso indisponível' : `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg`;
 
-function SummaryCard({ icon: Icon, title, description, values, tint }) {
-  return <article className={`shared-metric consultation-card ${tint}`}>
-    <div className="consultation-card-heading"><span className={`shared-metric-icon ${tint}`}><Icon size={18} /></span><h2>{title}</h2></div>
-    <p>{description}</p><strong>{money(values.amount)}</strong>
-    <div className="consultation-card-weight"><span>Peso</span><b>{formatWeight(values.weight)}</b></div>
-  </article>;
+function KPI({ icon: Icon, title, value, foot, tint }) {
+  return <div className={`kpi kpi-${tint}`}><span className="kpi-icon"><Icon size={24} strokeWidth={1.7} /></span><div><span className="kpi-label">{title}</span><strong className="kpi-value">{money(value.amount)}</strong><small className="kpi-foot">{foot} · {formatWeight(value.weight)}</small></div></div>;
 }
 
 export default function SharedDashboard({ token }) {
@@ -89,35 +85,34 @@ export default function SharedDashboard({ token }) {
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
 
+  const presets = [['week', '7 dias'], ['month', 'Mês'], ['all', 'Tudo'], ['custom', 'Datas']];
   return <main className="shared-dashboard">
-    <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><span>PAINEL DE ACOMPANHAMENTO</span><h1>Controle de fretes</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={theme === 'dark'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
-    <section className="shared-toolbar">
-      <div className="shared-range-tabs" aria-label="Filtrar período">
-        <button className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>Últimos 7 dias</button>
-        <button className={range === 'month' ? 'active' : ''} onClick={() => setRange('month')}>Por mês</button>
-        <button className={range === 'all' ? 'active' : ''} onClick={() => setRange('all')}>Todo período</button>
-        <button className={range === 'custom' ? 'active' : ''} onClick={() => setRange('custom')}>Personalizado</button>
+    <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><span>ACOMPANHAMENTO</span><h1>Painel de controle</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
+    <section className="panel dash-filters" aria-label="Filtros">
+      <div className="dash-presets" role="group" aria-label="Filtrar período">{presets.map(([key, label]) => <button key={key} type="button" className={range === key ? 'active' : ''} onClick={() => setRange(key)}>{label}</button>)}</div>
+      <div className="dash-filter-fields">
+        <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos os motoristas</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+        {range === 'month' && <label>Mês<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
+        {range === 'custom' && <><label>De<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></>}
       </div>
-      {range === 'month' && <label className="shared-date-select"><CalendarDays size={15} /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
-      {range === 'custom' && <div className="shared-custom-dates"><label>De<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
-      <label className="shared-driver-select"><Truck size={15} /><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos os motoristas</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
     </section>
 
     {period.start && period.end && period.start > period.end
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
-        <div className="shared-view-context"><div><h2>Resumo da operação</h2><p>{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'}</p></div><span className="shared-view-badge">Somente consulta</span></div>
-        <section className="consultation-summary" aria-label="Resumo da operação por situação">
-          <SummaryCard icon={ClipboardList} title="Em aberto" description="Ainda sem fechamento" values={summary.open} tint="amber" />
-          <SummaryCard icon={FolderCheck} title="Fechados" description="Aguardando envio por e-mail" values={summary.waiting} tint="violet" />
-          <SummaryCard icon={Mail} title="Solicitados por e-mail" description="Ciclo atual · até sexta às 17h de Manaus" values={summary.requested} tint="blue" />
-          <SummaryCard icon={CreditCard} title="Total geral" description="Todo o movimento do período, incluindo o histórico" values={summary.total} tint="green" />
-        </section>
-        <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral. Os gráficos abaixo mostram o movimento total dos filtros selecionados.</p>
+        <p className="shared-view-context">{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'} · <span className="shared-view-badge">Somente consulta</span></p>
         <FreightForecast data={data} driver={driverFilter} period={period} />
-        <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
+        <section className="dash-kpis" aria-label="Resumo da operação por situação">
+          <KPI icon={ClipboardList} tint="amber" title="Em aberto" value={summary.open} foot="Sem fechamento" />
+          <KPI icon={FolderCheck} tint="violet" title="Fechados" value={summary.waiting} foot="Aguardando envio" />
+          <KPI icon={Mail} tint="blue" title="Solicitados" value={summary.requested} foot="Ciclo atual" />
+          <KPI icon={CreditCard} tint="green" title="Total geral" value={summary.total} foot="Com histórico" />
+        </section>
+        <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral.</p>
+        <details className="dash-charts"><summary>Gráficos do período</summary>
+          <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
+        </details>
       </>}
-    <footer className="shared-footer">Ciclo atualizado automaticamente · Dados atualizados a cada 30 segundos enquanto o painel estiver aberto · Acesso somente para consulta</footer>
+    <footer className="shared-footer">Atualiza sozinho a cada 30 segundos · Acesso somente para consulta</footer>
   </main>;
 }
-
