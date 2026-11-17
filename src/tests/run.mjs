@@ -14,6 +14,7 @@ import './consultation.test.mjs';
 import './history-search.test.mjs';
 
 import './dashboard-summary.test.mjs';
+import './driver-payments.test.mjs';
 import './outlook-package.test.mjs';
 import './outlook-helper.test.mjs';
 import './app-update.test.mjs';

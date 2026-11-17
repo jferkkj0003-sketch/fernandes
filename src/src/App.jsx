@@ -12,7 +12,6 @@ import {
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
 import FreightPreviews from './FreightPreviews';
-import { summarizeDashboardTickets } from './lib/dashboard-summary';
 import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
@@ -23,6 +22,7 @@ import { buildOutlookPackage } from './lib/outlook-package';
 import { startOutlookHelper } from './lib/outlook-helper';
 import { appErrorMessage } from './lib/app-update';
 import History from './History';
+import Dashboard from './Dashboard';
 import { downloadPreferences } from './lib/downloads';
 
 const initialTickets = [
@@ -1080,100 +1080,6 @@ function formatDashboardWeight(value) {
     : `${weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
 }
 
-function Dashboard({ tickets, drivers: driverRecords, goTo }) {
-  const [driverFilter, setDriverFilter] = useState('Todos');
-  const [startDate, setStartDate] = useState(() => `${localToday().slice(0, 7)}-01`);
-  const [endDate, setEndDate] = useState(localToday);
-  const [chartGranularity, setChartGranularity] = useState('day');
-  const drivers = useMemo(() => driverOptions(driverRecords, tickets), [driverRecords, tickets]);
-  const invalidDateRange = Boolean(startDate && endDate && startDate > endDate);
-  const filteredTickets = useMemo(() => invalidDateRange ? [] : tickets.filter((ticket) =>
-    (driverFilter === 'Todos' || recordDriverKey(ticket) === driverFilter) && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate),
-  ), [tickets, driverFilter, startDate, endDate, invalidDateRange]);
-  const summary = useMemo(() => summarizeDashboardTickets(filteredTickets), [filteredTickets]);
-  const chartData = useMemo(() => {
-    const groups = new Map();
-    for (const ticket of filteredTickets) {
-      if (!ticket.dateISO) continue;
-      let key = ticket.dateISO;
-      let label = formatDate(key).slice(0, 5);
-      if (chartGranularity === 'month') {
-        key = ticket.dateISO.slice(0, 7);
-        const [year, month] = key.split('-').map(Number);
-        label = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(new Date(year, month - 1, 1));
-      } else if (chartGranularity === 'week') {
-        const [year, month, day] = key.split('-').map(Number);
-        const weekStart = new Date(year, month - 1, day);
-        weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-        key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
-        label = formatDate(key).slice(0, 5);
-      }
-      const group = groups.get(key) || { key, label, count: 0, weight: 0 };
-      group.count += 1;
-      group.weight += Number(ticket.weight || 0);
-      groups.set(key, group);
-    }
-    const maxPeriods = chartGranularity === 'day' ? 14 : 12;
-    return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key)).slice(-maxPeriods);
-  }, [filteredTickets, chartGranularity]);
-  const maxChartCount = Math.max(1, ...chartData.map((item) => item.count));
-  const weightByDriver = useMemo(() => {
-    const totals = new Map();
-    for (const ticket of filteredTickets) {
-      const name = ticket.driver || 'Motorista não identificado';
-      totals.set(name, (totals.get(name) || 0) + Number(ticket.weight || 0));
-    }
-    const sorted = [...totals].map(([name, weight]) => ({ name, weight })).filter((item) => item.weight > 0).sort((a, b) => b.weight - a.weight);
-    const topDrivers = sorted.slice(0, 5);
-    const otherWeight = sorted.slice(5).reduce((sum, item) => sum + item.weight, 0);
-    return otherWeight > 0 ? [...topDrivers, { name: 'Outros', weight: otherWeight }] : topDrivers;
-  }, [filteredTickets]);
-  const donutTotalWeight = weightByDriver.reduce((sum, item) => sum + item.weight, 0);
-  const donutColors = ['#3478ea', '#2a9b72', '#e5a631', '#8b6bd6', '#e16c55', '#8291a5'];
-  let donutPosition = 0;
-  const weightDonutGradient = donutTotalWeight > 0 ? `conic-gradient(${weightByDriver.map((item, index) => {
-    const start = donutPosition;
-    donutPosition += (item.weight / donutTotalWeight) * 100;
-    return `${donutColors[index % donutColors.length]} ${start}% ${donutPosition}%`;
-  }).join(', ')})` : 'conic-gradient(#dce4ee 0% 100%)';
-  const formatWeight = formatDashboardWeight;
-
-  return <>
-    <PageHeading eyebrow="VISÃO GERAL" title="Painel de controle" subtitle="Consulte os fretes em aberto, fechados e solicitados por e-mail." action={<button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>} />
-    <section className="panel dashboard-filter-panel">
-      <div className="panel-heading"><div><h2>Filtros</h2><p>Todos os indicadores e gráficos seguem o motorista e o período selecionados.</p></div></div>
-      <div className="filter-fields dashboard-filters">
-        <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label>
-        <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onInput={(event) => setStartDate(event.currentTarget.value)} onChange={(event) => setStartDate(event.target.value)} /></label>
-        <label>Data final<input type="date" value={endDate} min={startDate || undefined} onInput={(event) => setEndDate(event.currentTarget.value)} onChange={(event) => setEndDate(event.target.value)} /></label>
-      </div>
-      {invalidDateRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
-    </section>
-
-    <section className="metrics-grid home-metrics-grid dashboard-kpi-grid" aria-label="Indicadores da operação">
-      <Metric icon={ClipboardList} label="Total de fretes" value={summary.count.toLocaleString('pt-BR')} tint="blue" foot="No período selecionado" />
-      <Metric icon={Truck} label="Peso transportado" value={formatWeight(summary.weight)} tint="violet" foot="Somado no período" />
-      <Metric icon={BadgeDollarSign} label="Valor total" value={money(summary.amount)} tint="green" foot="Líquido após descontos" />
-      <Metric icon={ClipboardList} label="Tickets em aberto" value={summary.open.count.toLocaleString('pt-BR')} tint="amber" foot={`${money(summary.open.amount)} aguardando fechamento`} />
-      <Metric icon={FileText} label="Fechados aguardando envio" value={summary.pending.count.toLocaleString('pt-BR')} tint="violet" foot={`${money(summary.pending.amount)} em tickets para solicitar por e-mail`} />
-      <Metric icon={Check} label="Solicitados por e-mail" value={summary.sent.count.toLocaleString('pt-BR')} tint="green" foot={`${money(summary.sent.amount)} em tickets já solicitados`} />
-    </section>
-
-    <section className="dashboard-charts" aria-label="Gráficos do período">
-      <div className="panel dashboard-chart-panel">
-        <div className="panel-heading dashboard-chart-heading"><div><h2>Fretes no período</h2><p>Quantidade por {chartGranularity === 'day' ? 'dia' : chartGranularity === 'week' ? 'semana' : 'mês'}</p></div><div className="dashboard-chart-switch" aria-label="Agrupar gráfico de fretes"><button className={chartGranularity === 'day' ? 'active' : ''} onClick={() => setChartGranularity('day')}>Dia</button><button className={chartGranularity === 'week' ? 'active' : ''} onClick={() => setChartGranularity('week')}>Semana</button><button className={chartGranularity === 'month' ? 'active' : ''} onClick={() => setChartGranularity('month')}>Mês</button></div></div>
-        <DashboardBarChart data={chartData} field="count" max={maxChartCount} format={(value) => Number(value).toLocaleString('pt-BR')} tint="blue" ariaLabel="Quantidade de fretes por período" />
-      </div>
-      <div className="panel dashboard-chart-panel">
-        <div className="panel-heading"><div><h2>Peso por motorista</h2><p>Distribuição do peso no período filtrado</p></div></div>
-        {donutTotalWeight > 0 ? <div className="dashboard-weight-layout"><div className="dashboard-weight-donut" role="img" aria-label={`Peso total ${formatWeight(donutTotalWeight)}, distribuído entre ${weightByDriver.length} grupos de motoristas`} style={{ background: weightDonutGradient }}><div><strong>{formatWeight(donutTotalWeight)}</strong><span>Peso total</span></div></div><div className="dashboard-weight-legend">{weightByDriver.map((item, index) => <div className="dashboard-weight-row" key={item.name}><span className="dashboard-weight-swatch" style={{ background: donutColors[index % donutColors.length] }} /><span className="dashboard-weight-name" title={item.name}>{item.name}</span><strong>{formatWeight(item.weight)}</strong></div>)}</div></div> : <div className="empty-state">Sem peso registrado neste período.</div>}
-      </div>
-    </section>
-
-
-  </>;
-}
-
 function OpenTicketTotals({ tickets, selected = false, filtered = false }) {
   const totals = tickets.reduce((sum, ticket) => ({
     amount: sum.amount + Number(ticket.gross || 0) - Number(ticket.discount || 0),
@@ -1184,13 +1090,6 @@ function OpenTicketTotals({ tickets, selected = false, filtered = false }) {
     <Metric icon={BadgeDollarSign} label={selected ? 'Valor líquido selecionado' : filtered ? 'Valor líquido dos tickets' : 'Valor líquido em aberto'} value={money(totals.amount)} tint="green" foot="Valor líquido após descontos" />
     <Metric icon={Truck} label={selected ? 'Peso total selecionado' : filtered ? 'Peso total dos tickets' : 'Peso total em aberto'} value={`${totals.weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`} tint="violet" foot="Soma do peso dos tickets" />
   </div>;
-}
-
-function DashboardBarChart({ data, field, max, format, tint, ariaLabel }) {
-  if (!data.length) return <div className="empty-state">Sem dados para exibir neste período.</div>;
-  return <div className="dashboard-chart-scroll"><div className="dashboard-bar-chart" role="img" aria-label={ariaLabel}>
-    {data.map((item) => <div className="dashboard-bar-column" key={item.key} title={`${item.label}: ${format(item[field])}`}><span className="dashboard-bar-value">{format(item[field])}</span><div className="dashboard-bar-stage"><div className={`dashboard-bar-fill ${tint}`} style={{ height: `${Math.max(item[field] > 0 ? 3 : 0, item[field] / max * 100)}%` }} /></div><span className="dashboard-bar-label">{item.label}</span></div>)}
-  </div></div>;
 }
 
 function Metric({ icon: Icon, label, value, tint, foot }) {
