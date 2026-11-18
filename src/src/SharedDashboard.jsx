@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, ChevronDown, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
 import { cloudConfigured, loadSharedClosingTickets, loadSharedDashboard } from './lib/cloud';
 import FreightCharts from './ConsultationValueChart';
+import SharedTicketDetail from './SharedTicketDetail';
 import { makeDriverColorMap } from './lib/driver-colors';
 import { consultationPeriodSummary } from './lib/consultation-period';
 import './consultation-panel.css';
@@ -48,6 +49,7 @@ const TICKETS_PAGE_SIZE = 50;
 
 function ClosingTicketList({ token, driver, start, end, version }) {
   const [page, setPage] = useState(0);
+  const [activeTicket, setActiveTicket] = useState(null);
   const [retry, setRetry] = useState(0);
   const [result, setResult] = useState({ loading: true, error: false, rows: [] });
 
@@ -60,18 +62,22 @@ function ClosingTicketList({ token, driver, start, end, version }) {
     return () => { active = false; };
   }, [token, driver, start, end, page, retry, version]);
 
-  if (result.loading) return <p className="fx-ticket-message" role="status">Carregando tickets…</p>;
-  if (result.error) return <div className="fx-ticket-message" role="alert">
+  if (result.loading && !activeTicket) return <p className="fx-ticket-message" role="status">Carregando tickets…</p>;
+  if (result.error && !activeTicket) return <div className="fx-ticket-message" role="alert">
     Não foi possível carregar os tickets. <button type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>
   </div>;
 
   return <div className="fx-ticket-list">
+    {activeTicket && <SharedTicketDetail token={token} ticket={activeTicket} driver={driver}
+      period={{ start, end }} onClose={() => setActiveTicket(null)} />}
     {result.rows.length ? <div className="fx-ticket-scroll" tabIndex={0} aria-label={'Tickets de ' + driver}>
       <table>
         <caption>Tickets de {driver}</caption>
         <thead><tr><th scope="col">Ticket</th><th scope="col">Data</th><th scope="col">Peso</th><th scope="col">Valor líquido</th><th scope="col">Situação</th></tr></thead>
-        <tbody>{result.rows.slice(0, TICKETS_PAGE_SIZE).map((ticket, index) => <tr key={ticket.number + '-' + index}>
-          <th scope="row">{ticket.number}</th><td>{ticket.date ? brFull(ticket.date) : '—'}</td>
+        <tbody>{result.rows.slice(0, TICKETS_PAGE_SIZE).map((ticket) => <tr key={ticket.id}>
+          <th scope="row"><button type="button" className="fx-ticket-open" onClick={() => setActiveTicket(ticket)}>
+            <Ticket size={14} aria-hidden="true" /> {ticket.number}
+          </button></th><td>{ticket.date ? brFull(ticket.date) : '—'}</td>
           <td>{fmtWeight(ticket.weight)}</td><td>{money(ticket.amount)}</td><td>{ticket.status}</td>
         </tr>)}</tbody>
       </table>

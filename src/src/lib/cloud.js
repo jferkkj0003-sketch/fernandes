@@ -435,6 +435,14 @@ async function sharedDashboardTokenHash(token) {
   return Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+export async function loadSharedClosingTicketDetail(token, ticketId, driver, start, end) {
+  const { data, error } = await supabase.functions.invoke('shared-closing-ticket', {
+    body: { token, ticketId, driver, start: start || null, end: end || null },
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function loadSharedClosingTickets(token, driver, start, end, offset) {
   const { data, error } = await supabase.rpc('get_shared_closing_tickets', {
     token_hash_input: await sharedDashboardTokenHash(token),

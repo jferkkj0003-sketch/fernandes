@@ -1403,7 +1403,7 @@ function DashboardShareManager({ isAdmin }) {
   if (!isAdmin) return null;
   return <section className="account-share">
     <div className="account-share-heading"><span><Link2 size={16} /></span><div><strong>Compartilhar painel</strong><p>Crie um link de consulta aos gráficos e totais.</p></div></div>
-    <p className="account-share-note">Qualquer pessoa com o link poderá ver os totais da operação. Dados bancários, comprovantes e informações pessoais não aparecem.</p>
+    <p className="account-share-note">Quem tiver o link poderá consultar os totais e abrir os comprovantes dos tickets do fechamento em aberto. Compartilhe somente com as pessoas autorizadas.</p>
     {busy ? <p className="account-share-status">Carregando configuração do link…</p> : link ? <>
       <label className="account-share-url">Link do painel<input readOnly value={link} onFocus={(event) => event.target.select()} /></label>
       <div className="account-share-actions"><button className="button primary" type="button" onClick={copy}><Copy size={15} /> Copiar link</button><button className="button secondary" type="button" onClick={revoke} disabled={busy}>Desativar link</button></div>

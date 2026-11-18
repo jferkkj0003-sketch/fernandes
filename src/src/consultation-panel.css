@@ -133,3 +133,34 @@
 .fx-ticket-scroll td:nth-child(3), .fx-ticket-scroll td:nth-child(4) { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fx-ticket-pages { display: flex; justify-content: end; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
 .fx-ticket-pages button:disabled { opacity: .5; cursor: default; }
+
+.fx-ticket-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 3px 8px;
+  border: 1px solid var(--p-bd);
+  border-radius: 8px;
+  background: var(--p-card-2);
+  color: var(--p-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fx-ticket-open:hover { border-color: var(--p-accent); }
+.fx-ticket-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(990px, calc(100% - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--p-text);
+}
+.fx-ticket-dialog::backdrop { background: rgb(0 0 0 / 64%); backdrop-filter: blur(5px); }
+@media (max-width: 560px) {
+  .fx-ticket-dialog { width: calc(100% - 12px); max-height: calc(100dvh - 12px); }
+}
