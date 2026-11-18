@@ -21,3 +21,4 @@ import './outlook-helper.test.mjs';
 import './app-update.test.mjs';
 import './closure-email-template.test.mjs';
 import './outlook-preferences.test.mjs';
+import './consultation-period.test.mjs';

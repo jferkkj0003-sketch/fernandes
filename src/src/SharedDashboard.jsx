@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, ChevronRight, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight, Wallet } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import OverviewCharts from './OverviewCharts';
+import { consultationPeriodSummary } from './lib/consultation-period';
+import './consultation-panel.css';
 import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
 import { operationalSummary, sharedPaymentSummary } from './lib/shared-payments';
 
@@ -32,7 +34,8 @@ export default function SharedDashboard({ token }) {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [range, setRange] = useState('week');
+  const [range, setRange] = useState('all');
+  const [scope, setScope] = useState('open');
   const [now, setNow] = useState(() => new Date());
   const [month, setMonth] = useState(() => monthISO(new Date()));
   const [customStart, setCustomStart] = useState(() => dateISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
@@ -100,14 +103,12 @@ export default function SharedDashboard({ token }) {
   const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || []), ...(data?.freight_previews || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
   const view = useMemo(() => {
-    // Na visão "Semana" não se filtra por data: vale tudo que está em aberto ou a pagar agora (inclusive de semanas anteriores).
-    const calc = range === 'week' ? { start: '', end: '' } : period;
+    const calc = period;
     const inPeriod = (day) => (!calc.start || day >= calc.start) && (!calc.end || day <= calc.end);
     const base = sharedPaymentSummary(data, calc, driverFilter);
     const open = operationalSummary(data, calc, driverFilter, 'open');
     const pending = base.closures.filter((closure) => closure.payment_status === 'pending');
     const requested = pending.filter((closure) => closure.email_status === 'Solicitado' && isCurrentRequest(closure, now));
-    const archived = pending.filter((closure) => closure.email_status === 'Solicitado' && !isCurrentRequest(closure, now));
     const waiting = pending.filter((closure) => closure.email_status !== 'Solicitado');
     const previews = (data?.freight_previews || []).filter((item) => (!driverFilter || item.driver === driverFilter) && !item.confirmed && !item.included_in_request && inPeriod(item.loading_date));
     const stage = (list) => ({ count: sum(list, 'filteredCount'), weight: sum(list, 'filteredWeight'), amount: sum(list, 'filteredTotal') });
@@ -123,9 +124,8 @@ export default function SharedDashboard({ token }) {
     for (const closure of [...waiting, ...requested]) { const item = get(closure.driver); item.count += closure.filteredCount; if (item.weight !== null) item.weight += closure.filteredWeight; item.confirmed += closure.filteredTotal; }
     for (const preview of previews) get(preview.driver).waiting += Number(preview.amount || 0);
     const rows = [...map.values()].sort((a, b) => b.confirmed - a.confirmed || a.name.localeCompare(b.name, 'pt-BR'));
-    const alreadyPaid = base.closed.paid + sum(archived, 'filteredTotal');
-    const overall = operationalSummary(data, {}, driverFilter, 'all');
-    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, rows, alreadyPaid, overall, ranked: operationalSummary(data, period, driverFilter, 'all').ranked };
+    const overall = consultationPeriodSummary(data, period, driverFilter);
+    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, rows, overall, ranked: operationalSummary(data, period, driverFilter, 'all').ranked };
   }, [data, period, range, driverFilter, now]);
 
   const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
@@ -150,27 +150,35 @@ export default function SharedDashboard({ token }) {
       <button type="button" className="fx-icon-btn" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
     </header>
 
+    <section className="fx-card" aria-label="Visão da consulta">
+      <div className="fx-chips fx-consultation-tabs" role="tablist" aria-label="Visão da consulta">
+        <button id="consultation-open-tab" role="tab" aria-selected={scope === 'open'} aria-controls="consultation-content" className={scope === 'open' ? 'on' : ''} onClick={() => setScope('open')}>Fechamento em aberto</button>
+        <button id="consultation-history-tab" role="tab" aria-selected={scope === 'history'} aria-controls="consultation-content" className={scope === 'history' ? 'on' : ''} onClick={() => setScope('history')}>Período completo</button>
+      </div>
+    </section>
+
     <section className="fx-card fx-filters" aria-label="Filtros">
       <div className="fx-chips" role="group" aria-label="Período">{presets.map(([key, label]) => <button key={key} type="button" className={range === key ? 'on' : ''} onClick={() => setRange(key)}>{label}</button>)}</div>
       <div className="fx-fields">
         <label className="fx-field"><span>Motorista</span><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
         {range === 'month' && <label className="fx-field"><span>Mês</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
-        {range === 'custom' && <><label className="fx-field"><span>De</span><input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label className="fx-field"><span>Até</span><input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></>}
+        <label className="fx-field"><span>Data inicial</span><input type="date" value={period.start} max={period.end || undefined} onChange={(event) => { setCustomStart(event.target.value); setCustomEnd(period.end); setRange('custom'); }} /></label><label className="fx-field"><span>Data final</span><input type="date" value={period.end} min={period.start || undefined} onChange={(event) => { setCustomStart(period.start); setCustomEnd(event.target.value); setRange('custom'); }} /></label>
       </div>
-      {(range === 'week' || range === 'month') && <div className="fx-period"><CalendarDays size={16} />{range === 'week' ? `Semana ${periodLabel} · inclui em aberto anteriores` : periodLabel}</div>}
+      {(range === 'week' || range === 'month') && <div className="fx-period"><CalendarDays size={16} />{range === 'week' ? `Semana ${periodLabel}` : periodLabel}</div>}
     </section>
 
-    {invalidRange ? <div className="fx-alert danger"><AlertCircle size={18} /> A data inicial precisa ser anterior ou igual à data final.</div> : <>
+    {invalidRange ? <div className="fx-alert danger"><AlertCircle size={18} /> A data inicial precisa ser anterior ou igual à data final.</div> : <div id="consultation-content" role="tabpanel" aria-labelledby={scope === 'open' ? 'consultation-open-tab' : 'consultation-history-tab'}>
       <section className="fx-banner" aria-label="Fechamento">
         <span className="fx-banner-icon"><CalendarDays size={26} /></span>
-        <div><h2>{range === 'week' ? 'Fechamento da Semana' : 'Período selecionado'}</h2>
-          {range === 'week'
+        <div><h2>{scope === 'open' ? 'Fechamento em aberto' : 'Período completo'}</h2>
+          {range === 'week' && scope === 'open'
             ? <p><span>Período: {brShort(cycle.start)} a {brShort(cycle.end)}</span><span>Fechamento: quinta, {brShort(cycle.thursday)}</span><span>Pagamento: sexta, {brShort(cycle.friday)}</span></p>
             : <p><span>{periodLabel}</span><span>{driverFilter || 'Todos os motoristas'}</span></p>}</div>
         <Truck className="fx-banner-truck" size={54} strokeWidth={1.2} />
       </section>
 
-      <section className="fx-kpis" aria-label="Indicadores">
+      {scope === 'open' ? <>
+      <section className="fx-kpis" aria-label="Indicadores do fechamento em aberto">
         <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
@@ -203,24 +211,36 @@ export default function SharedDashboard({ token }) {
           </section>
 
           {view.preview.amount > 0 && <aside className="fx-alert warn"><Info size={20} /><div><strong>Atenção</strong><p>Existem cargas em “Aguardando ticket”. O valor pode aumentar com a entrada dos tickets pendentes.</p></div></aside>}
-          {view.alreadyPaid > 0 && <aside className="fx-alert info"><Wallet size={20} /><div><strong>Já pago: {money(view.alreadyPaid)}</strong><p>Ciclos anteriores · fora do total a pagar.</p></div></aside>}
         </div>
       </div>
 
-      <section className="fx-card fx-summary" aria-label="Resumo geral">
-        <h2 className="fx-h2"><Layers size={18} /> Resumo Geral <small>(Todo o período)</small></h2>
-        <div className="fx-summary-grid">
-          <div><small>Total de tickets</small><strong>{view.overall.ticketCount.toLocaleString('pt-BR')}</strong></div>
-          <div><small>Peso total</small><strong>{fmtWeight(view.overall.weight)}</strong></div>
-          <div><small>Valor total</small><strong>{money(view.overall.amount)}</strong></div>
-        </div>
-      </section>
+      </> : <>
+        <section className="fx-kpis fx-history-kpis" aria-label="Indicadores do período completo">
+          <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Total de tickets</small><strong>{view.overall.ticketCount.toLocaleString('pt-BR')}</strong></div>
+          <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.overall.weight)}</strong></div>
+          <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Valor total</small><strong>{money(view.overall.amount)}</strong></div>
+          <div className="fx-kpi" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Wallet size={20} /></span><small>Já pago</small><strong>{money(view.overall.paid)}</strong></div>
+        </section>
+        <section className="fx-card" aria-label="Motoristas no período completo">
+          <h2 className="fx-h2"><Users size={20} /> Resumo por motorista <small>({periodLabel})</small></h2>
+          <p className="fx-note">Totais dos tickets nas datas selecionadas. Já pago considera somente pagamentos registrados, pela data do ticket.</p>
+          <div className="fx-table fx-history-table">
+            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Valor total</span><span>Já pago</span><span /></div>
+            {view.overall.ranked.map((row, index) => <div key={row.driver} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
+              <span className="who"><span className="fx-avatar">{initials(row.driver)}</span><span className="nm"><b>{row.driver}</b><small className="sub">{row.count} tickets · {fmtWeight(row.weight)}</small></span></span>
+              <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span><span className="c">{money(row.amount)}</span><span className="a"><small className="fx-mobile-label">Já pago: </small>{money(row.paid)}</span><span className="go" aria-hidden="true" />
+            </div>)}
+            {!view.overall.ranked.length && <p className="fx-empty">Nenhum ticket para as datas e o motorista selecionados.</p>}
+          </div>
+          {view.overall.ranked.length > 0 && <div className="fx-total-bar"><b>Total do período</b><span className="t">{view.overall.ticketCount}</span><span className="w">{fmtWeight(view.overall.weight)}</span><span className="c">{money(view.overall.amount)}</span><span className="a">{money(view.overall.paid)}</span></div>}
+        </section>
+      </>}
 
       <p className="fx-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral.</p>
-      <details className="fx-card fx-charts"><summary>Gráficos do período</summary>
+      {scope === 'history' && <details className="fx-card fx-charts"><summary>Gráficos do período</summary>
         <OverviewCharts rows={view.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
-      </details>
-    </>}
+      </details>}
+    </div>}
     <footer className="fx-footer">Atualiza sozinho a cada 30 segundos · Acesso somente para consulta</footer>
   </main>;
 }

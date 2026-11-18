@@ -1,0 +1,12 @@
+.fx-consultation-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.fx-consultation-tabs button { min-height: 44px; padding: 12px 20px; }
+.fx-page .fx-history-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.fx-page .fx-history-kpis .fx-kpi { min-width: 0; }
+.fx-page .fx-history-kpis strong { overflow-wrap: anywhere; }
+@media (max-width: 760px) { .fx-page .fx-history-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fx-consultation-tabs button { flex: 1 1 180px; } }
+@media (max-width: 420px) { .fx-page .fx-history-kpis { grid-template-columns: 1fr; } }
+#consultation-content { display: grid; gap: 16px; min-width: 0; }
+.fx-page .fx-filters { display: flex; flex-wrap: wrap; align-items: end; }
+.fx-page .fx-fields { flex: 1 1 500px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.fx-mobile-label { font-size: inherit; }
+@media (min-width: 520px) { .fx-mobile-label { display: none; } }
