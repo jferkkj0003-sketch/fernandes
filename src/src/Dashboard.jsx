@@ -143,17 +143,17 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     <section className="cx-top">
       <PayHero label={`Previsão de pagamento · sexta, ${brShort(friday)}`} total={totals.payable} paid={totals.paid} parts={parts}
         sub={`${totals.trips} ${totals.trips === 1 ? 'viagem' : 'viagens'} · ${formatWeight(totals.weight)} · ${rows.length} ${rows.length === 1 ? 'motorista' : 'motoristas'}`} />
-      <aside className="panel cx-attn" aria-label="Precisa de atenção">
-        <div className="cx-attn-head"><h2>Precisa de atenção</h2><span className="subtle-count">{alerts.length}</span></div>
+      <aside className="panel cx-attn" aria-label="Fazer agora">
+        <div className="cx-attn-head"><h2>Fazer agora</h2><span className="subtle-count">{alerts.length}</span></div>
         {alerts.map((alert) => <div key={alert.title} className="cx-attn-item"><i style={{ background: alert.color }} /><div><strong>{alert.title}</strong><small>{alert.text}</small></div><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
         {!alerts.length && <p className="empty-state">Tudo em dia. Nada pendente agora.</p>}
       </aside>
     </section>
 
-    <section className="panel" aria-label="Andamento dos tickets">
-      <div className="panel-heading"><h2>Andamento dos tickets</h2></div>
+    <section className="panel" aria-label="Caminho do dinheiro">
+      <div className="panel-heading"><h2>Caminho do dinheiro</h2></div>
       <div className="cx-steps" style={{ marginTop: 0 }}>
-        {steps.map(([name, count, value, note, color]) => <div key={name} className="cx-step" style={{ '--sc': color }}><span>{name}</span><strong>{count}</strong><em>{money(value)}</em><small>{note}</small></div>)}
+        {steps.map(([name, count, value, note, color], index) => <div key={name} className="cx-step" style={{ '--sc': color }}><span>{index + 1} · {name}</span><strong>{count}</strong><em>{money(value)}</em><small>{note}</small></div>)}
       </div>
     </section>
 

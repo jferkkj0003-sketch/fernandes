@@ -32,10 +32,10 @@ export default function FreightForecast({ data, driver, period, paid = 0 }) {
         const detail = STATES.filter(([key]) => row[key] > 0).map(([key, name]) => `${name} ${money0(row[key])}`).join(' · ');
         return <article key={row.name} className="panel cx-drv">
           <div className="cx-who"><span className="cx-av" style={{ background: AVATARS[index % AVATARS.length] }}>{initials(row.name)}</span>
-            <div><strong>{row.name}</strong><small>{row.openCount ? `${row.openCount} ${row.openCount === 1 ? 'ticket em aberto' : 'tickets em aberto'}` : 'Valor previsto'}</small></div></div>
+            <div><strong>{row.name}</strong><small>{row.openCount ? `${row.openCount} ${row.openCount === 1 ? 'ticket em aberto' : 'tickets em aberto'}` : 'Valor previsto'}</small></div>
+            <strong className="cx-amt">{money(row.amount)}</strong></div>
           <div className="cx-mini">{STATES.map(([key, , color]) => <div key={key} style={{ flex: Math.max(row[key], 0), background: color }} />)}</div>
           <p className="cx-detail">{detail || 'Sem valores no período'}</p>
-          <div className="cx-row"><span>A pagar</span><strong>{money(row.amount)}</strong></div>
         </article>;
       })}
       {!forecast.drivers.length && <p className="empty-state">Nenhum valor previsto para os filtros selecionados.</p>}
