@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, Check, ChevronRight, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight, Wallet } from 'lucide-react';
+import { AlertCircle, CalendarDays, Check, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
-import DriverValueChart from './DriverValueChart';
+import ConsultationValueChart from './ConsultationValueChart';
 import { consultationPeriodSummary } from './lib/consultation-period';
 import './consultation-panel.css';
 import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
@@ -209,18 +209,18 @@ export default function SharedDashboard({ token }) {
       </section>
 
       <div className="fx-grid">
-        <section className="fx-card" aria-label="Valores por motorista">
+        <section className="fx-card fx-open-drivers" aria-label="Valores por motorista">
           <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
           <div className="fx-table">
-            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Total a pagar</span><span>Em carregamento</span><span /></div>
+            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Em carregamento</span><span>Valor total</span></div>
             {view.rows.map((row, index) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
               <span className="who"><span className="fx-avatar">{initials(row.name)}</span><span className="nm"><b>{row.name}</b><small className="sub">{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></span></span>
               <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span>
-              <span className="c">{money(row.payable)}</span><span className="a">{row.waiting > 0 ? <><small className="fx-mobile-label">Em carregamento: </small>{money(row.waiting)}</> : '—'}</span><ChevronRight size={18} className="go" />
+              <span className="a">{row.waiting > 0 ? <><small className="fx-mobile-label">Em carregamento: </small>{money(row.waiting)}</> : '—'}</span><span className="c">{money(row.payable)}</span>
             </div>)}
             {!view.rows.length && <p className="fx-empty">Nenhum valor para os filtros selecionados.</p>}
           </div>
-          {view.rows.length > 0 && <div className="fx-total-bar"><b>{range === 'week' ? 'Total da Semana' : 'Total'}</b><span className="t">{view.confirmed.count}</span><span className="w">{fmtWeight(view.confirmed.weight)}</span><span className="c">{money(view.payable.amount)}</span><span className="a">{money(view.preview.amount)}</span></div>}
+          {view.rows.length > 0 && <div className="fx-total-bar"><b>{range === 'week' ? 'Total da Semana' : 'Total'}</b><span className="t">{view.confirmed.count}</span><span className="w">{fmtWeight(view.confirmed.weight)}</span><span className="a">{money(view.preview.amount)}</span><span className="c">{money(view.payable.amount)}</span></div>}
         </section>
 
         <div className="fx-stack">
@@ -241,25 +241,23 @@ export default function SharedDashboard({ token }) {
           <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Total de tickets</small><strong>{view.overall.ticketCount.toLocaleString('pt-BR')}</strong></div>
           <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.overall.weight)}</strong></div>
           <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Valor total</small><strong>{money(view.overall.amount)}</strong></div>
-          <div className="fx-kpi" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Wallet size={20} /></span><small>Já pago</small><strong>{money(view.overall.paid)}</strong></div>
         </section>
-        <section className="fx-card" aria-label="Motoristas no período completo">
+        <section className="fx-card fx-history-drivers" aria-label="Motoristas no período completo">
           <h2 className="fx-h2"><Users size={20} /> Resumo por motorista <small>({periodLabel})</small></h2>
-          <p className="fx-note">Totais dos tickets nas datas selecionadas. Já pago considera somente pagamentos registrados, pela data do ticket.</p>
           <div className="fx-table fx-history-table">
-            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Valor total</span><span>Já pago</span><span /></div>
+            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Valor total</span></div>
             {view.overall.ranked.map((row, index) => <div key={row.driver} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
               <span className="who"><span className="fx-avatar">{initials(row.driver)}</span><span className="nm"><b>{row.driver}</b><small className="sub">{row.count} tickets · {fmtWeight(row.weight)}</small></span></span>
-              <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span><span className="c">{money(row.amount)}</span><span className="a"><small className="fx-mobile-label">Já pago: </small>{money(row.paid)}</span><span className="go" aria-hidden="true" />
+              <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span><span className="c">{money(row.amount)}</span>
             </div>)}
             {!view.overall.ranked.length && <p className="fx-empty">Nenhum ticket para as datas e o motorista selecionados.</p>}
           </div>
-          {view.overall.ranked.length > 0 && <div className="fx-total-bar"><b>Total do período</b><span className="t">{view.overall.ticketCount}</span><span className="w">{fmtWeight(view.overall.weight)}</span><span className="c">{money(view.overall.amount)}</span><span className="a">{money(view.overall.paid)}</span></div>}
+          {view.overall.ranked.length > 0 && <div className="fx-total-bar"><b>Total do período</b><span className="t">{view.overall.ticketCount}</span><span className="w">{fmtWeight(view.overall.weight)}</span><span className="c">{money(view.overall.amount)}</span></div>}
         </section>
       </>}
 
       <p className="fx-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral.</p>
-      <DriverValueChart
+      <ConsultationValueChart
         rows={scope === 'history'
           ? view.overall.ranked.map((row) => ({ key: row.driver, name: row.driver, amount: row.amount }))
           : view.rows.map((row) => ({ key: row.name, name: row.name, amount: row.payable }))}
