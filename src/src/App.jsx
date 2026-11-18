@@ -19,6 +19,7 @@ import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
 import DownloadPreferences from './DownloadPreferences';
 import ClosureEmailPreferences from './ClosureEmailPreferences';
+import './closure-overview.css';
 import ClosureOutlookModal from './ClosureOutlookModal';
 import { buildOutlookPackage } from './lib/outlook-package';
 import { startOutlookHelper } from './lib/outlook-helper';
@@ -1509,11 +1510,80 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
   </div>;
 }
 
+function ClosingOverview({ tickets }) {
+  const [previewState, setPreviewState] = useState({ status: supabase ? 'loading' : 'ready', rows: [] });
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let active = true;
+    setPreviewState({ status: 'loading', rows: [] });
+    supabase.from('freight_previews')
+      .select('driver_id, amount, driver:drivers(name)')
+      .is('cancelled_at', null)
+      .is('ticket_id', null)
+      .then(({ data, error }) => {
+        if (active) setPreviewState(error ? { status: 'error', rows: [] } : { status: 'ready', rows: data || [] });
+      }, () => {
+        if (active) setPreviewState({ status: 'error', rows: [] });
+      });
+    return () => { active = false; };
+  }, [tickets]);
+
+  const byDriver = new Map();
+  function getDriver(key, name) {
+    if (!byDriver.has(key)) byDriver.set(key, { key, name: name || 'Motorista não identificado', count: 0, weight: 0, confirmed: 0, preview: 0 });
+    return byDriver.get(key);
+  }
+  let weight = 0;
+  let confirmed = 0;
+  let preview = 0;
+  for (const ticket of tickets) {
+    const row = getDriver(recordDriverKey(ticket), ticket.driver);
+    const ticketWeight = Number(ticket.weight) || 0;
+    const amount = (Number(ticket.gross) || 0) - (Number(ticket.discount) || 0);
+    row.count += 1;
+    row.weight += ticketWeight;
+    row.confirmed += amount;
+    weight += ticketWeight;
+    confirmed += amount;
+  }
+  for (const item of previewState.rows) {
+    const row = getDriver(item.driver_id, item.driver?.name);
+    const amount = Number(item.amount) || 0;
+    row.preview += amount;
+    preview += amount;
+  }
+  const hasPreviews = previewState.rows.length > 0;
+  const rows = [...byDriver.values()].sort((a, b) => (b.confirmed + b.preview) - (a.confirmed + a.preview)
+    || a.name.localeCompare(b.name, 'pt-BR'));
+
+  return <section className="closing-overview" aria-label="Resumo em aberto">
+    <h3>Resumo em aberto</h3>
+    <div className="open-ticket-totals">
+      <Metric icon={Truck} label="Peso total" value={formatDashboardWeight(weight)} tint="violet" foot="Peso dos tickets em aberto" />
+      <Metric icon={BadgeDollarSign} label="Valor dos tickets" value={money(confirmed)} tint="green" foot="Valor líquido após descontos" />
+      <Metric icon={ClipboardList} label="Valor total previsto" value={previewState.status === 'ready' ? money(confirmed + preview) : '—'} tint="amber"
+        foot={previewState.status === 'error' ? 'Prévias indisponíveis' : previewState.status === 'loading' ? 'Consultando prévias' : 'Tickets em aberto + prévias pendentes'} />
+    </div>
+    {rows.length > 0 && <div className="table-wrap">
+      <ResponsiveTable aria-label="Valores em aberto por motorista">
+        <thead><tr><th scope="col">Motorista</th><th scope="col">Tickets</th><th scope="col">Peso</th>
+          {hasPreviews && <th scope="col">Em carregamento</th>}<th scope="col">{hasPreviews ? 'Valor total previsto' : 'Valor dos tickets'}</th></tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.key}>
+          <td><strong>{row.name}</strong></td><td><strong>{row.count.toLocaleString('pt-BR')}</strong></td><td><strong>{formatDashboardWeight(row.weight)}</strong></td>
+          {hasPreviews && <td>{row.preview ? money(row.preview) : '—'}</td>}<td><strong>{money(row.confirmed + row.preview)}</strong></td>
+        </tr>)}</tbody>
+      </ResponsiveTable>
+    </div>}
+    {hasPreviews && <p className="closing-overview-note">Prévias compõem a previsão. O fechamento é gerado com os tickets selecionados abaixo.</p>}
+  </section>;
+}
+
 function Closures({ user, onView, tickets, drivers: driverRecords, closures, canDelete, onGenerate, onPreview, onDownload, onEmail, onMarkRequested, onDelete }) {
   const [generating, setGenerating] = useState(false);
   const [driver, setDriver] = useState('');
   const [selectedTicketIds, setSelectedTicketIds] = useState(() => new Set());
-  const pendingTickets = tickets.filter((ticket) => ticket.status === 'Aberto');
+  const pendingTickets = useMemo(() => tickets.filter((ticket) => ticket.status === 'Aberto'), [tickets]);
   const pendingKeys = new Set(pendingTickets.map(recordDriverKey));
   const drivers = driverOptions(driverRecords, pendingTickets).filter((option) => pendingKeys.has(option.key));
   const matches = driver ? pendingTickets.filter((ticket) => recordDriverKey(ticket) === driver,
@@ -1533,6 +1603,7 @@ function Closures({ user, onView, tickets, drivers: driverRecords, closures, can
   return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Feche os tickets pendentes por motorista." action={<button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Plus size={17} /> {generating ? 'Gerando…' : `Gerar fechamento${selectedMatches.length ? ` (${selectedMatches.length})` : ''}`}</button>} />
     <ClosureEmailPreferences user={user} />
     <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista para ver todos os tickets em aberto.</p></div></div>
+      <ClosingOverview tickets={pendingTickets} />
       <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label></div>
       {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>{drivers.length ? 'Selecione um motorista para ver os tickets pendentes.' : 'Nenhum ticket pendente para fechar.'}</span></div> : matches.length ? <>
         <OpenTicketTotals tickets={selectedMatches} selected />
