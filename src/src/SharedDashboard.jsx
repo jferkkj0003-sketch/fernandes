@@ -264,11 +264,11 @@ export default function SharedDashboard({ token }) {
             <div className="fx-total-row slim"><span>Total a pagar</span><span>{view.payable.count}</span><b>{money(view.payable.amount)}</b></div>
           </section>
 
-          <aside className={view.preview.count > 0 ? 'fx-alert warn' : 'fx-alert'}>
+          <aside className="fx-alert warn">
             <Info size={20} aria-hidden="true" />
             <div>
               <strong>Aguardando ticket</strong>
-              <p>Enquanto o motorista está carregando na fábrica, a carga fica aguardando a emissão do ticket. O valor da prévia já entra no total a pagar.</p>
+              <p>As cargas em carregamento na fábrica ficam com status “Aguardando ticket” até a emissão do comprovante. O valor previsto já está incluído no total a pagar.</p>
             </div>
           </aside>
         </div>
