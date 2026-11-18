@@ -101,3 +101,35 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+.fx-ticket-toggle,
+.fx-ticket-pages button,
+.fx-ticket-message button {
+  border: 1px solid var(--p-bd);
+  border-radius: 8px;
+  background: var(--p-card-2);
+  color: var(--p-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 9px;
+}
+.fx-ticket-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+  margin-top: 5px;
+  min-height: 30px;
+}
+.fx-ticket-toggle[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
+.fx-ticket-list, .fx-ticket-message { padding: 10px 12px; background: var(--p-field); border-radius: 10px; }
+.fx-ticket-scroll { overflow-x: auto; max-width: 100%; }
+.fx-ticket-scroll table { width: 100%; min-width: 405px; border-collapse: collapse; font-size: 13px; }
+.fx-ticket-scroll caption { text-align: left; padding: 5px 7px 10px; color: var(--p-text); font-weight: 750; }
+.fx-ticket-scroll th, .fx-ticket-scroll td { padding: 8px 7px; text-align: left; border-top: 1px solid var(--p-sep); }
+.fx-ticket-scroll td { color: var(--p-dim); }
+.fx-ticket-scroll td:nth-child(3), .fx-ticket-scroll td:nth-child(4) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fx-ticket-pages { display: flex; justify-content: end; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+.fx-ticket-pages button:disabled { opacity: .5; cursor: default; }

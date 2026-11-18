@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, Check, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
-import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
+import { AlertCircle, CalendarDays, Check, ChevronDown, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
+import { cloudConfigured, loadSharedClosingTickets, loadSharedDashboard } from './lib/cloud';
 import FreightCharts from './ConsultationValueChart';
 import { makeDriverColorMap } from './lib/driver-colors';
 import { consultationPeriodSummary } from './lib/consultation-period';
@@ -44,6 +44,46 @@ function trackObservedChange(token, data) {
   } catch { return null; }
 }
 
+const TICKETS_PAGE_SIZE = 50;
+
+function ClosingTicketList({ token, driver, start, end, version }) {
+  const [page, setPage] = useState(0);
+  const [retry, setRetry] = useState(0);
+  const [result, setResult] = useState({ loading: true, error: false, rows: [] });
+
+  useEffect(() => {
+    let active = true;
+    setResult({ loading: true, error: false, rows: [] });
+    loadSharedClosingTickets(token, driver, start, end, page * TICKETS_PAGE_SIZE)
+      .then((rows) => { if (active) setResult({ loading: false, error: false, rows }); })
+      .catch(() => { if (active) setResult({ loading: false, error: true, rows: [] }); });
+    return () => { active = false; };
+  }, [token, driver, start, end, page, retry, version]);
+
+  if (result.loading) return <p className="fx-ticket-message" role="status">Carregando tickets…</p>;
+  if (result.error) return <div className="fx-ticket-message" role="alert">
+    Não foi possível carregar os tickets. <button type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>
+  </div>;
+
+  return <div className="fx-ticket-list">
+    {result.rows.length ? <div className="fx-ticket-scroll" tabIndex={0} aria-label={'Tickets de ' + driver}>
+      <table>
+        <caption>Tickets de {driver}</caption>
+        <thead><tr><th scope="col">Ticket</th><th scope="col">Data</th><th scope="col">Peso</th><th scope="col">Valor líquido</th><th scope="col">Situação</th></tr></thead>
+        <tbody>{result.rows.slice(0, TICKETS_PAGE_SIZE).map((ticket, index) => <tr key={ticket.number + '-' + index}>
+          <th scope="row">{ticket.number}</th><td>{ticket.date ? brFull(ticket.date) : '—'}</td>
+          <td>{fmtWeight(ticket.weight)}</td><td>{money(ticket.amount)}</td><td>{ticket.status}</td>
+        </tr>)}</tbody>
+      </table>
+    </div> : <p className="fx-ticket-message">Nenhum ticket nesse intervalo.</p>}
+    {(page > 0 || result.rows.length > TICKETS_PAGE_SIZE) && <div className="fx-ticket-pages" aria-label="Páginas de tickets">
+      <button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>Anterior</button>
+      <span>Página {page + 1}</span>
+      <button type="button" disabled={result.rows.length <= TICKETS_PAGE_SIZE} onClick={() => setPage((value) => value + 1)}>Próxima</button>
+    </div>}
+  </div>;
+}
+
 export default function SharedDashboard({ token }) {
   const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
   const [data, setData] = useState(null);
@@ -53,6 +93,7 @@ export default function SharedDashboard({ token }) {
   const [datesOpen, setDatesOpen] = useState(false);
   const [range, setRange] = useState('all');
   const [scope, setScope] = useState('open');
+  const [expandedDriver, setExpandedDriver] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [month, setMonth] = useState(() => monthISO(new Date()));
   const [customStart, setCustomStart] = useState(() => dateISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
@@ -222,11 +263,24 @@ export default function SharedDashboard({ token }) {
           <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
           <div className="fx-table">
             <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Em carregamento</span><span>Valor total</span></div>
-            {view.rows.map((row) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': colorOf(row.name) }}>
-              <span className="who"><span className="fx-avatar">{initials(row.name)}</span><span className="nm"><b>{row.name}</b><small className="sub">{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></span></span>
+            {view.rows.map((row, index) => <React.Fragment key={row.name}>
+              <div className="fx-tr fx-row" style={{ '--c': colorOf(row.name) }}>
+              <span className="who"><span className="fx-avatar">{initials(row.name)}</span><span className="nm"><b>{row.name}</b>{row.count > 0 && <button type="button" className="fx-ticket-toggle"
+                aria-expanded={expandedDriver === row.name} aria-controls={'closing-tickets-' + index}
+                aria-label={(expandedDriver === row.name ? 'Recolher tickets de ' : 'Ver tickets de ') + row.name}
+                onClick={() => setExpandedDriver((current) => current === row.name ? '' : row.name)}>
+                <Ticket size={14} aria-hidden="true" /> {expandedDriver === row.name ? 'Recolher' : 'Ver tickets'} <ChevronDown size={14} aria-hidden="true" />
+              </button>}<small className="sub">{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></span></span>
               <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span>
               <span className="a">{row.waiting > 0 ? <><small className="fx-mobile-label">Em carregamento: </small>{money(row.waiting)}</> : '—'}</span><span className="c">{money(row.payable)}</span>
-            </div>)}
+              </div>
+              {row.count > 0 && <div id={'closing-tickets-' + index} hidden={expandedDriver !== row.name}>
+                {expandedDriver === row.name && <ClosingTicketList
+                  key={period.start + '|' + period.end} token={token} driver={row.name}
+                  start={period.start} end={period.end} version={lastModified}
+                />}
+              </div>}
+            </React.Fragment>)}
             {!view.rows.length && <p className="fx-empty">Nenhum valor para os filtros selecionados.</p>}
           </div>
           {view.rows.length > 0 && <div className="fx-total-bar"><b>{range === 'week' ? 'Total da Semana' : 'Total'}</b><span className="t">{view.confirmed.count}</span><span className="w">{fmtWeight(view.confirmed.weight)}</span><span className="a">{money(view.preview.amount)}</span><span className="c">{money(view.payable.amount)}</span></div>}

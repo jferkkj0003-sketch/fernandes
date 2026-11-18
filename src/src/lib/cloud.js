@@ -430,9 +430,25 @@ export async function revokeDashboardShare() {
   if (error) throw error;
 }
 
-export async function loadSharedDashboard(token) {
+async function sharedDashboardTokenHash(token) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-  const tokenHash = Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+export async function loadSharedClosingTickets(token, driver, start, end, offset) {
+  const { data, error } = await supabase.rpc('get_shared_closing_tickets', {
+    token_hash_input: await sharedDashboardTokenHash(token),
+    driver_input: driver,
+    start_input: start || null,
+    end_input: end || null,
+    offset_input: offset,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function loadSharedDashboard(token) {
+  const tokenHash = await sharedDashboardTokenHash(token);
   const [dashboardResult, driverResult, paymentResult, previewResult] = await Promise.all([
     supabase.rpc('get_shared_dashboard', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_driver_summary', { token_hash_input: tokenHash }),
