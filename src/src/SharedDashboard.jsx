@@ -16,7 +16,7 @@ const nextFriday = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d
 const brShort = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const brFull = (iso) => iso.split('-').reverse().join('/');
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-const AVATARS = ['#2f7bff', '#22c55e', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
+const AVATARS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 const sum = (list, field) => list.reduce((total, item) => total + (Number(item[field]) || 0), 0);
 
 function Ago({ at }) {
@@ -100,9 +100,11 @@ export default function SharedDashboard({ token }) {
   const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || []), ...(data?.freight_previews || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
   const view = useMemo(() => {
-    const inPeriod = (day) => (!period.start || day >= period.start) && (!period.end || day <= period.end);
-    const base = sharedPaymentSummary(data, period, driverFilter);
-    const open = operationalSummary(data, period, driverFilter, 'open');
+    // Na visão "Semana" não se filtra por data: vale tudo que está em aberto ou a pagar agora (inclusive de semanas anteriores).
+    const calc = range === 'week' ? { start: '', end: '' } : period;
+    const inPeriod = (day) => (!calc.start || day >= calc.start) && (!calc.end || day <= calc.end);
+    const base = sharedPaymentSummary(data, calc, driverFilter);
+    const open = operationalSummary(data, calc, driverFilter, 'open');
     const pending = base.closures.filter((closure) => closure.payment_status === 'pending');
     const requested = pending.filter((closure) => closure.email_status === 'Solicitado' && isCurrentRequest(closure, now));
     const archived = pending.filter((closure) => closure.email_status === 'Solicitado' && !isCurrentRequest(closure, now));
@@ -124,7 +126,7 @@ export default function SharedDashboard({ token }) {
     const alreadyPaid = base.closed.paid + sum(archived, 'filteredTotal');
     const overall = operationalSummary(data, {}, driverFilter, 'all');
     return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, rows, alreadyPaid, overall, ranked: operationalSummary(data, period, driverFilter, 'all').ranked };
-  }, [data, period, driverFilter, now]);
+  }, [data, period, range, driverFilter, now]);
 
   const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={logo} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
@@ -133,10 +135,10 @@ export default function SharedDashboard({ token }) {
   const presets = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Datas']];
   const periodLabel = range === 'all' ? 'Todo o período' : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
   const situation = [
-    ['Em aberto', view.open.ticketCount, view.open.amount, 'var(--green)'],
-    ['Aguardando ticket', view.preview.count, view.preview.amount, 'var(--amber)', true],
-    ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, 'var(--blue)'],
-    ['Solicitado', view.requested.count, view.requested.amount, 'var(--violet)'],
+    ['Em aberto', view.open.ticketCount, view.open.amount, '#10b981'],
+    ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b', true],
+    ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, '#3b82f6'],
+    ['Solicitado', view.requested.count, view.requested.amount, '#8b5cf6'],
   ];
 
   return <main className="fx-page">
@@ -155,7 +157,7 @@ export default function SharedDashboard({ token }) {
         {range === 'month' && <label className="fx-field"><span>Mês</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
         {range === 'custom' && <><label className="fx-field"><span>De</span><input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label className="fx-field"><span>Até</span><input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></>}
       </div>
-      {(range === 'week' || range === 'month') && <div className="fx-period"><CalendarDays size={16} /> {periodLabel}</div>}
+      {(range === 'week' || range === 'month') && <div className="fx-period"><CalendarDays size={16} />{range === 'week' ? `Semana ${periodLabel} · inclui em aberto anteriores` : periodLabel}</div>}
     </section>
 
     {invalidRange ? <div className="fx-alert danger"><AlertCircle size={18} /> A data inicial precisa ser anterior ou igual à data final.</div> : <>
@@ -169,9 +171,9 @@ export default function SharedDashboard({ token }) {
       </section>
 
       <section className="fx-kpis" aria-label="Indicadores">
-        <div className="fx-kpi" style={{ '--c': '#2f7bff' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
+        <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></div>
-        <div className="fx-kpi" style={{ '--c': '#22c55e' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
+        <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#f59e0b' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><small>Aguardando Ticket</small><strong>{money(view.preview.amount)}</strong></div>
         <div className="fx-kpi total" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar (confirmado)</small><strong>{money(view.confirmed.amount)}</strong></div>
       </section>
