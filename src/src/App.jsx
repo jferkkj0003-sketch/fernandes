@@ -11,7 +11,7 @@ import {
   revokeDashboardShare, setOperatorActive, signIn, signOut, subscribeCloudChanges, updateCloudAccount, updateCloudClosure, updateCloudTicket, verifyAdminPassword,
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
-import FreightPreviews from './FreightPreviews';
+import { PreviewForm, PendingPreviewList } from './PreviewTools';
 import TicketPreviewPanel from './TicketPreviewPanel';
 import { linkStillValid } from './lib/ticket-preview';
 import PdfScanPreview from './PdfScanPreview';
@@ -50,11 +50,6 @@ const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', cur
 const localToday = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
-const localDaysAgo = (days) => {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 const formatDate = (value) => {
   if (!value) return '';
@@ -1102,14 +1097,17 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
   const [scanName, setScanName] = useState('');
   const [selectedPreview, setSelectedPreview] = useState(null);
   const [pendingPreviews, setPendingPreviews] = useState([]);
-  const [draft, setDraft] = useState({ driverId: '', date: localToday(), number: '', weight: '', gross: '1000', discount: '0' });
+  const [draft, setDraft] = useState({ driverId: '', date: localToday(), number: '', weight: '', gross: '', discount: '0' });
   const ticketForm = useRef(null);
+  const [mode, setMode] = useState('ticket');
+  const [toLink, setToLink] = useState(null);
   const [ticketDriver, setTicketDriver] = useState('');
   const [formOpen, setFormOpen] = useState(() => window.matchMedia('(min-width: 801px)').matches);
   const options = driverOptions(drivers, tickets);
   const activeDrivers = drivers.filter((driver) => driver.active !== false);
   const listedTickets = tickets.filter((ticket) => !ticketDriver || recordDriverKey(ticket) === ticketDriver);
   const readDraft = (form) => {
+    if (!form.elements.number) return draft;
     const driver = activeDrivers.find((item) => driverKey(item) === form.elements.driver.value);
     return { driverId: driver?.id || '', date: form.elements.date.value, number: form.elements.number.value.trim(), weight: form.elements.weight.value, gross: form.elements.gross.value, discount: form.elements.discount.value };
   };
@@ -1132,6 +1130,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
     setFormOpen(true);
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  useEffect(() => { if (mode === 'ticket' && toLink && ticketForm.current) { applyPreview(toLink); setToLink(null); } }, [mode, toLink]);
   const handleFormChange = (event) => {
     const next = readDraft(event.currentTarget);
     setDraft(next);
@@ -1164,16 +1163,17 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
   return <>
     <PageHeading eyebrow="LANÇAMENTOS" title="Tickets" subtitle="Registre os fretes e acompanhe o andamento de cada ticket." />
     <section className={`panel form-panel ${formOpen ? '' : 'collapsed'}`}>
-      <div className="panel-heading form-heading"><div><h2><span className="heading-icon"><Plus size={17} /></span> Registrar ticket</h2><p>Os campos com * são obrigatórios.</p></div><span className="form-step">NOVO LANÇAMENTO</span><button type="button" className="button secondary small-button form-toggle" aria-expanded={formOpen} onClick={() => setFormOpen((open) => !open)}>{formOpen ? 'Recolher' : 'Abrir'}</button></div>
-      <form className="ticket-form" ref={ticketForm} onSubmit={handleTicketSubmit} onChange={handleFormChange}>
+      <div className="panel-heading form-heading"><div><h2><span className="heading-icon"><Plus size={17} /></span> {mode === 'ticket' ? 'Registrar ticket' : 'Registrar prévia'}</h2><p>{mode === 'ticket' ? 'Os campos com * são obrigatórios.' : 'Viagem sem ticket ainda: o ticket é vinculado depois.'}</p></div><div className="seg form-step" role="tablist" aria-label="Tipo de lançamento"><button type="button" role="tab" aria-selected={mode === 'ticket'} className={mode === 'ticket' ? 'on' : ''} onClick={() => setMode('ticket')}>Ticket</button><button type="button" role="tab" aria-selected={mode === 'previa'} className={mode === 'previa' ? 'on' : ''} onClick={() => setMode('previa')}>Prévia</button></div><button type="button" className="button secondary small-button form-toggle" aria-expanded={formOpen} onClick={() => setFormOpen((open) => !open)}>{formOpen ? 'Recolher' : 'Abrir'}</button></div>
+      {mode === 'previa' && <PreviewForm drivers={drivers} onSaved={loadPendingPreviews} />}
+      {mode === 'ticket' && <form className="ticket-form" ref={ticketForm} onSubmit={handleTicketSubmit} onChange={handleFormChange}>
         <input type="hidden" name="previewId" value={selectedPreview?.id || ''} />
         <TicketPreviewPanel previews={pendingPreviews} draft={draft} selected={selectedPreview} cloud={cloudConfigured} onLink={applyPreview} onUnlink={() => setSelectedPreview(null)} />
         <label>Data *<input type="date" name="date" defaultValue={localToday()} required /></label>
         <label>Nº do ticket *<input name="number" placeholder="Ex.: 1465" required /></label>
-        <label>Motorista *<select name="driver" defaultValue="" required onChange={(event) => { const selected = activeDrivers.find((driver) => driverKey(driver) === event.target.value); event.currentTarget.form.elements.plate.value = selected?.plate || ''; event.currentTarget.form.elements.gross.value = Number(selected?.defaultFare ?? 1000).toFixed(2); }}><option value="" disabled>Selecione…</option>{activeDrivers.map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}</option>)}</select></label>
+        <label>Motorista *<select name="driver" defaultValue="" required onChange={(event) => { const selected = activeDrivers.find((driver) => driverKey(driver) === event.target.value); event.currentTarget.form.elements.plate.value = selected?.plate || ''; event.currentTarget.form.elements.gross.value = selected?.defaultFare == null ? '' : Number(selected.defaultFare).toFixed(2); }}><option value="" disabled>Selecione…</option>{activeDrivers.map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}</option>)}</select></label>
         <label>Placa<input name="plate" placeholder="Ex.: ABC-1D23" /></label>
         <label>Peso (kg) *<input name="weight" type="number" min="0" step="0.01" placeholder="0,00" required /></label>
-        <label>Valor bruto (R$) *<input name="gross" type="number" min="0" step="0.01" defaultValue="1000" placeholder="0,00" required /></label>
+        <label>Valor bruto (R$) *<input name="gross" type="number" min="0" step="0.01" placeholder="0,00" required /></label>
         <label>Desconto (R$)<input name="discount" type="number" min="0" step="0.01" placeholder="0,00" defaultValue="0" /></label>
         <label className="wide-field">Observação<input name="note" placeholder="Ex.: valor referente a dois fretes" /></label>
         <div className="ticket-scan-field wide-field">
@@ -1186,9 +1186,9 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
           <small className="ticket-scan-help">No computador, importe o PDF ou a imagem. No celular, escolha uma foto da galeria ou tire uma foto. Imagens são reduzidas para ocupar menos espaço.</small>
         </div>
         <div className="form-actions"><span><span className="status-dot amber" /> {saving ? 'Salvando na nuvem…' : cloudConfigured ? 'O lançamento será confirmado após salvar na nuvem.' : 'Demonstração local: este lançamento não vai para a nuvem.'}</span><button className="button primary" type="submit" disabled={saving}>{saving ? 'Salvando…' : <><Check size={16} /> Registrar ticket</>}</button></div>
-      </form>
+      </form>}
+      <PendingPreviewList rows={pendingPreviews} selectedId={selectedPreview?.id} isAdmin={isAdmin} onChanged={loadPendingPreviews} onSelect={(preview) => { setMode('ticket'); setToLink(preview); }} />
     </section>
-    <FreightPreviews drivers={drivers} isAdmin={isAdmin} rows={pendingPreviews} selectedId={selectedPreview?.id} onChanged={loadPendingPreviews} onSelect={applyPreview} />
     <section className="panel list-panel">
       <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={exportCsv}><ArrowDownToLine size={16} /> Exportar</button></div>
       <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select ticket-driver-filter" aria-label="Filtrar por motorista" value={ticketDriver} onChange={(event) => setTicketDriver(event.target.value)}><option value="">Todos os motoristas</option>{options.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select><select className="filter-select" aria-label="Filtrar por status" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>
@@ -1512,13 +1512,11 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
 function Closures({ user, onView, tickets, drivers: driverRecords, closures, canDelete, onGenerate, onPreview, onDownload, onEmail, onMarkRequested, onDelete }) {
   const [generating, setGenerating] = useState(false);
   const [driver, setDriver] = useState('');
-  const [start, setStart] = useState(() => localDaysAgo(5));
-  const [end, setEnd] = useState(localToday);
   const [selectedTicketIds, setSelectedTicketIds] = useState(() => new Set());
-  const drivers = driverOptions(driverRecords, tickets);
-  const validRange = Boolean(start && end && start <= end);
-  const matches = validRange && driver ? tickets.filter((ticket) =>
-    ticket.status === 'Aberto' && ticket.dateISO >= start && ticket.dateISO <= end && recordDriverKey(ticket) === driver,
+  const pendingTickets = tickets.filter((ticket) => ticket.status === 'Aberto');
+  const pendingKeys = new Set(pendingTickets.map(recordDriverKey));
+  const drivers = driverOptions(driverRecords, pendingTickets).filter((option) => pendingKeys.has(option.key));
+  const matches = driver ? pendingTickets.filter((ticket) => recordDriverKey(ticket) === driver,
   ).sort((a, b) => a.dateISO.localeCompare(b.dateISO) || a.number.localeCompare(b.number)) : [];
   const matchKey = matches.map((ticket) => ticket.id).join('|');
   useEffect(() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id))), [matchKey]);
@@ -1528,21 +1526,21 @@ function Closures({ user, onView, tickets, drivers: driverRecords, closures, can
   const handleGenerate = async () => {
     if (generating || !selectedMatches.length) return;
     setGenerating(true);
-    try { await onGenerate(selectedMatches, start, end); }
+    try { await onGenerate(selectedMatches); }
     finally { setGenerating(false); }
   };
 
-  return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Gere um fechamento por motorista e período." action={<button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Plus size={17} /> {generating ? 'Gerando…' : `Gerar fechamento${selectedMatches.length ? ` (${selectedMatches.length})` : ''}`}</button>} />
+  return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Feche os tickets pendentes por motorista." action={<button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Plus size={17} /> {generating ? 'Gerando…' : `Gerar fechamento${selectedMatches.length ? ` (${selectedMatches.length})` : ''}`}</button>} />
     <ClosureEmailPreferences user={user} />
-    <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista e o período. Cada fechamento é individual.</p></div></div>
-      <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label><label>Data inicial<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>Data final<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
-      {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>Selecione um motorista para ver os tickets disponíveis para fechar.</span></div> : !validRange ? <div className="empty-callout warning-callout"><CircleHelp size={18} /><span>A data inicial precisa ser anterior ou igual à data final.</span></div> : matches.length ? <>
+    <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista para ver todos os tickets em aberto.</p></div></div>
+      <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label></div>
+      {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>{drivers.length ? 'Selecione um motorista para ver os tickets pendentes.' : 'Nenhum ticket pendente para fechar.'}</span></div> : matches.length ? <>
         <OpenTicketTotals tickets={selectedMatches} selected />
-        <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Todos os abertos do filtro: <strong>{money(matches.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))}</strong> · {matches.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0).toLocaleString('pt-BR')} kg</span></div>
+        <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Todos os abertos deste motorista: <strong>{money(matches.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))}</strong> · {matches.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0).toLocaleString('pt-BR')} kg</span></div>
         <div className="selection-toolbar"><button className="text-button" onClick={() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id)))}>Selecionar todos</button><button className="text-button" onClick={() => setSelectedTicketIds(new Set())}>Limpar seleção</button></div>
         <div className="table-wrap closure-results"><ResponsiveTable><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><label className="closure-ticket-select"><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></label></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td><td><button type="button" className="row-action" aria-label={`Ver ticket ${ticket.number}`} onClick={() => onView(ticket)}><Eye size={14} /> Ver</button></td></tr>)}</tbody></ResponsiveTable></div>
         <div className="closure-action"><span>O fechamento será somente de {drivers.find((option) => option.key === driver)?.name} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
-      </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket aberto encontrado nesse período. Os resultados mudam automaticamente ao alterar os filtros.</span></div>}
+      </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket pendente para este motorista.</span></div>}
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
       {pendingClosures.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onEmail(item)}><Mail size={14} /> Enviar no e-mail</button><button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar como solicitado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}

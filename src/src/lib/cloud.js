@@ -441,7 +441,14 @@ export async function loadSharedDashboard(token) {
   ]);
   const error = dashboardResult.error || driverResult.error || paymentResult.error || previewResult.error;
   if (error) throw error;
+  // Data da última modificação gravada no banco. Opcional: se a migração ainda não foi aplicada, segue sem ela.
+  let lastModified = null;
+  try {
+    const { data, error: modifiedError } = await supabase.rpc('get_shared_last_modified', { token_hash_input: tokenHash });
+    if (!modifiedError && data) lastModified = data;
+  } catch { /* migração opcional */ }
   return {
+    last_modified: lastModified,
     ...dashboardResult.data,
     drivers_by_day: driverResult.data?.drivers_by_day || [],
     closure_payments: paymentResult.data?.closure_payments || [],

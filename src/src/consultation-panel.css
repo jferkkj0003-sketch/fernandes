@@ -10,3 +10,21 @@
 .fx-page .fx-fields { flex: 1 1 500px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .fx-mobile-label { font-size: inherit; }
 @media (min-width: 520px) { .fx-mobile-label { display: none; } }
+
+.fx-page .fx-fields,
+.fx-page .fx-field,
+.fx-page .fx-field input,
+.fx-page .fx-field select { min-width: 0; }
+.fx-page .fx-field input,
+.fx-page .fx-field select { box-sizing: border-box; width: 100%; }
+
+@media (max-width: 800px) {
+  .fx-page .fx-filters { position: static; }
+  .fx-page .fx-fields { flex-basis: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fx-page .fx-field:has(select),
+  .fx-page .fx-field:has(input[type="month"]) { grid-column: 1 / -1; }
+}
+@media (max-width: 360px) {
+  .fx-page .fx-fields { grid-template-columns: minmax(0, 1fr); }
+}
+

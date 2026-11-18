@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, ChevronRight, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight, Wallet } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
-import OverviewCharts from './OverviewCharts';
+import DriverValueChart from './DriverValueChart';
 import { consultationPeriodSummary } from './lib/consultation-period';
 import './consultation-panel.css';
 import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
@@ -21,11 +21,27 @@ const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slic
 const AVATARS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 const sum = (list, field) => list.reduce((total, item) => total + (Number(item[field]) || 0), 0);
 
-function Ago({ at }) {
-  const [, tick] = useState(0);
-  useEffect(() => { const id = window.setInterval(() => tick((n) => n + 1), 1000); return () => window.clearInterval(id); }, []);
-  const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
-  return <>{seconds < 60 ? `Atualizado há ${seconds} s` : `Atualizado há ${Math.floor(seconds / 60)} min`}</>;
+// Data da última modificação (fuso de Manaus), ex.: "18/11/2026 às 08:15".
+function formatModified(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const opts = { timeZone: 'America/Manaus' };
+  return `${date.toLocaleDateString('pt-BR', { ...opts, day: '2-digit', month: '2-digit', year: 'numeric' })} às ${date.toLocaleTimeString('pt-BR', { ...opts, hour: '2-digit', minute: '2-digit' })}`;
+}
+
+// Quando o banco não informa a data (migração ainda não aplicada) ou houve exclusão, registra o momento em que
+// a mudança dos dados foi percebida neste aparelho. Na primeira visita não há como saber, então não inventa data.
+function trackObservedChange(token, data) {
+  const key = `dde-fretes-seen-${token.slice(0, 8)}`;
+  const { last_modified: _ignored, ...rest } = data || {};
+  const signature = JSON.stringify(rest);
+  try {
+    const previous = JSON.parse(window.localStorage.getItem(key) || 'null');
+    if (!previous) { window.localStorage.setItem(key, JSON.stringify({ signature, changedAt: null })); return null; }
+    if (previous.signature !== signature) { const next = { signature, changedAt: Date.now() }; window.localStorage.setItem(key, JSON.stringify(next)); return next.changedAt; }
+    return previous.changedAt;
+  } catch { return null; }
 }
 
 export default function SharedDashboard({ token }) {
@@ -42,16 +58,19 @@ export default function SharedDashboard({ token }) {
   const [customEnd, setCustomEnd] = useState(() => dateISO(new Date()));
   const [driverFilter, setDriverFilter] = useState('');
   const [stale, setStale] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState(() => Date.now());
+  const [lastModified, setLastModified] = useState('');
 
   async function refresh(silent = false) {
     if (!silent) setLoading(true); else setRefreshing(true);
     setLoadError('');
     try {
       if (!cloudConfigured) throw new Error('O painel não está conectado ao banco de dados.');
-      setData(await loadSharedDashboard(token));
+      const fresh = await loadSharedDashboard(token);
+      setData(fresh);
       setStale(false);
-      setUpdatedAt(Date.now());
+      const observed = trackObservedChange(token, fresh);
+      const times = [Date.parse(fresh.last_modified), observed].filter(Number.isFinite);
+      setLastModified(times.length ? new Date(Math.max(...times)).toISOString() : '');
     } catch {
       if (silent) { setStale(true); return; }
       setLoadError('Este link não existe mais ou foi desativado. Peça ao responsável um novo link.');
@@ -125,8 +144,8 @@ export default function SharedDashboard({ token }) {
     for (const preview of previews) get(preview.driver).waiting += Number(preview.amount || 0);
     const rows = [...map.values()].sort((a, b) => b.confirmed - a.confirmed || a.name.localeCompare(b.name, 'pt-BR'));
     const overall = consultationPeriodSummary(data, period, driverFilter);
-    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, rows, overall, ranked: operationalSummary(data, period, driverFilter, 'all').ranked };
-  }, [data, period, range, driverFilter, now]);
+    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, rows, overall };
+  }, [data, period, driverFilter, now]);
 
   const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={logo} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
@@ -145,7 +164,7 @@ export default function SharedDashboard({ token }) {
     <header className="fx-header">
       <span className="fx-logo"><Truck size={28} strokeWidth={2} /></span>
       <div className="fx-title"><h1>Controle de Fretes <small>– Controladoria</small></h1><p>Consulta, fechamento e valores por motorista</p></div>
-      <div className={`fx-date${stale ? ' off' : ''}`}><CalendarDays size={20} /><div><b>{brFull(dateISO(now))}</b><small>{stale ? 'Sem conexão' : <Ago at={updatedAt} />}</small></div></div>
+      <div className={`fx-date${stale ? ' off' : ''}`}><CalendarDays size={20} /><div><small className="fx-date-label">Última modificação</small><b>{formatModified(lastModified) || '—'}</b>{stale && <small>Sem conexão · exibindo dados anteriores</small>}</div></div>
       <button type="button" className="fx-icon-btn" onClick={() => refresh(true)} aria-label="Atualizar agora"><RefreshCw size={22} className={refreshing ? 'fx-spin' : ''} /></button>
       <button type="button" className="fx-icon-btn" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
     </header>
@@ -237,10 +256,14 @@ export default function SharedDashboard({ token }) {
       </>}
 
       <p className="fx-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral.</p>
-      {scope === 'history' && <details className="fx-card fx-charts"><summary>Gráficos do período</summary>
-        <OverviewCharts rows={view.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />
-      </details>}
+      <DriverValueChart
+        rows={scope === 'history'
+          ? view.overall.ranked.map((row) => ({ key: row.driver, name: row.driver, amount: row.amount }))
+          : view.rows.filter((row) => row.count > 0).map((row) => ({ key: row.name, name: row.name, amount: row.confirmed }))}
+        periodLabel={periodLabel}
+      />
     </div>}
     <footer className="fx-footer">Atualiza sozinho a cada 30 segundos · Acesso somente para consulta</footer>
   </main>;
 }
+

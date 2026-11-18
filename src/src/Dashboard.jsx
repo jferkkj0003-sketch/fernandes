@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
 import { supabase } from './lib/cloud';
+import DriverValueChart, { driverColors } from './DriverValueChart';
 import { driverOptions } from './lib/drivers';
 import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
 
@@ -14,7 +15,6 @@ const brFull = (iso) => iso.split('-').reverse().join('/');
 const formatWeight = (value) => { const w = Number(value || 0); return w >= 1000 ? `${(w / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t` : `${w.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`; };
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 const firstName = (name) => String(name || '').split(/\s+/)[0];
-const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 const STATUS = [['all', 'Todos'], ['open', 'Em aberto'], ['waiting', 'Fechado'], ['requested', 'Solicitado'], ['paid', 'Pago'], ['preview', 'Aguardando ticket']];
 
 // Escala "bonita" para o eixo do gráfico de barras.
@@ -96,10 +96,8 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   // Resumo da semana: só tickets EM ABERTO de cada motorista, de qualquer data (inclui os da semana passada que ainda não fecharam).
   const week = useMemo(() => aggregate(records.filter((record) => record.status === 'open' && (driverFilter === 'Todos' || record.key === driverFilter))), [records, driverFilter]);
   const { rows, totals } = main;
-  // cor fixa por motorista (mesma cor nos gráficos e na tabela da semana)
-  const colorOf = (key) => { const i = rows.findIndex((row) => row.key === key); return COLORS[(i < 0 ? week.rows.findIndex((row) => row.key === key) : i) % COLORS.length]; };
+  const colorOf = (key) => driverColors[Math.max(0, drivers.findIndex((driver) => driver.key === key)) % driverColors.length];
 
-  const maxAmount = Math.max(0, ...rows.map((row) => row.amount));
   const maxWeight = Math.max(0, ...rows.map((row) => row.weight));
   const weightScale = niceCeil(maxWeight);
   const ticks = [0, 1, 2, 3, 4].map((i) => (weightScale / 4) * i);
@@ -135,9 +133,9 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     </section>
 
     <section className="fd-kpis" aria-label="Indicadores">
-      <div className="fd-kpi" style={{ '--c': '#3b82f6' }}><span className="fd-kpi-ico"><Ticket size={26} /></span><div><small>Total de Tickets</small><strong>{totals.tickets.toLocaleString('pt-BR')}</strong></div></div>
-      <div className="fd-kpi" style={{ '--c': '#8b5cf6' }}><span className="fd-kpi-ico"><Weight size={26} /></span><div><small>Peso Total</small><strong>{formatWeight(totals.weight)}</strong></div></div>
-      <div className="fd-kpi" style={{ '--c': '#10b981' }}><span className="fd-kpi-ico"><BadgeDollarSign size={28} /></span><div><small>Valor Total</small><strong>{money(totals.amount)}</strong></div></div>
+      <div className="fd-kpi" style={{ '--c': '#0A84FF' }}><span className="fd-kpi-ico"><Ticket size={26} /></span><div><small>Total de Tickets</small><strong>{totals.tickets.toLocaleString('pt-BR')}</strong></div></div>
+      <div className="fd-kpi" style={{ '--c': '#BF5AF2' }}><span className="fd-kpi-ico"><Weight size={26} /></span><div><small>Peso Total</small><strong>{formatWeight(totals.weight)}</strong></div></div>
+      <div className="fd-kpi" style={{ '--c': '#30D158' }}><span className="fd-kpi-ico"><BadgeDollarSign size={28} /></span><div><small>Valor Total</small><strong>{money(totals.amount)}</strong></div></div>
     </section>
 
     {alerts.length > 0 && <section className="fd-alerts" aria-label="Precisa de atenção">
@@ -145,25 +143,17 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     </section>}
 
     <div className="fd-two">
-      <section className="fd-card" aria-label="Valor por motorista">
-        <h2 className="fd-h2"><BadgeDollarSign size={20} /> Valor por Motorista <small>({periodLabel})</small></h2>
-        <div className="fd-hbars">
-          {rows.map((row, index) => <div key={row.key} className="fd-hbar"><span className="n">{row.name}</span>
-            <div className="track"><i style={{ width: `${maxAmount ? Math.max(6, (row.amount / maxAmount) * 100) : 0}%`, background: COLORS[index % COLORS.length] }} /></div>
-            <b>{money(row.amount)}</b></div>)}
-          {!rows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
-        </div>
-      </section>
+      <DriverValueChart rows={rows} periodLabel={periodLabel} colorFor={colorOf} />
 
-      <section className="fd-card" aria-label="Peso por motorista">
+      <section className="fd-card fd-glass-chart" aria-label="Peso por motorista">
         <h2 className="fd-h2"><Weight size={20} /> Peso por Motorista <small>({periodLabel})</small></h2>
         {rows.length > 0 ? <div className="fd-vchart">
           <div className="axis">{[...ticks].reverse().map((tick) => <span key={tick}>{tick === 0 ? '0' : formatWeight(tick)}</span>)}</div>
           <div className="plot">
             <div className="grid">{ticks.map((tick) => <i key={tick} />)}</div>
-            <div className="cols">{rows.map((row, index) => <div key={row.key} className="col">
-              <div className="barwrap" style={{ '--h': `${weightScale ? (row.weight / weightScale) * 100 : 0}%` }}><span className="val">{formatWeight(row.weight)}</span><i style={{ height: `${weightScale ? (row.weight / weightScale) * 100 : 0}%`, background: COLORS[index % COLORS.length] }} /></div>
-              <span className="lbl">{firstName(row.name)}</span></div>)}</div>
+            <div className="cols">{rows.map((row) => <div key={row.key} className="col">
+              <div className="barwrap" style={{ '--h': `${weightScale ? (row.weight / weightScale) * 100 : 0}%` }}><span className="val">{formatWeight(row.weight)}</span><i style={{ height: `${weightScale ? (row.weight / weightScale) * 100 : 0}%`, '--bar-color': colorOf(row.key) }} /></div>
+              <span className="lbl" title={row.name}>{firstName(row.name)}</span></div>)}</div>
           </div>
         </div> : <p className="empty-state">Nenhum peso para os filtros selecionados.</p>}
       </section>
@@ -186,11 +176,11 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       <section className="fd-card" aria-label="Resumo total">
         <h2 className="fd-h2"><ClipboardList size={20} /> Resumo Total <small>({periodLabel})</small></h2>
         <ul className="fd-total-list">
-          <li style={{ '--c': '#3b82f6' }}><span className="ico"><Ticket size={20} /></span><span>Total de Tickets</span><b>{totals.tickets.toLocaleString('pt-BR')}</b></li>
-          <li style={{ '--c': '#8b5cf6' }}><span className="ico"><Weight size={20} /></span><span>Peso Total</span><b>{formatWeight(totals.weight)}</b></li>
-          <li style={{ '--c': '#10b981' }}><span className="ico"><BadgeDollarSign size={20} /></span><span>Valor Total</span><b>{money(totals.amount)}</b></li>
-          <li style={{ '--c': '#f59e0b' }}><span className="ico"><Truck size={20} /></span><span>Em Aberto</span><b>{money(totals.open)}</b></li>
-          <li style={{ '--c': '#f97316' }}><span className="ico"><Hourglass size={20} /></span><span>Aguardando Ticket</span><b>{money(totals.preview)}</b></li>
+          <li style={{ '--c': '#0A84FF' }}><span className="ico"><Ticket size={20} /></span><span>Total de Tickets</span><b>{totals.tickets.toLocaleString('pt-BR')}</b></li>
+          <li style={{ '--c': '#BF5AF2' }}><span className="ico"><Weight size={20} /></span><span>Peso Total</span><b>{formatWeight(totals.weight)}</b></li>
+          <li style={{ '--c': '#30D158' }}><span className="ico"><BadgeDollarSign size={20} /></span><span>Valor Total</span><b>{money(totals.amount)}</b></li>
+          <li style={{ '--c': '#FF9F0A' }}><span className="ico"><Truck size={20} /></span><span>Em Aberto</span><b>{money(totals.open)}</b></li>
+          <li style={{ '--c': '#FF9F0A' }}><span className="ico"><Hourglass size={20} /></span><span>Aguardando Ticket</span><b>{money(totals.preview)}</b></li>
         </ul>
       </section>
     </div>

@@ -11,7 +11,7 @@ const br = (iso) => (iso ? iso.split('-').reverse().join('/') : '—');
 export default function TicketPreviewPanel({ previews, draft, selected, onLink, onUnlink, cloud }) {
   const candidates = matchingPreviews(previews, draft.driverId, draft.date).filter((p) => p.id !== selected?.id);
   const summary = ticketDraftSummary(draft, selected);
-  const hasValues = Number(draft.gross) > 0 || Number(draft.weight) > 0;
+  const hasValues = Boolean(draft.number || draft.gross !== '' || draft.weight !== '');
   const diff = summary.difference;
 
   return <div className="wide-field-all tp-wrap">
@@ -29,15 +29,15 @@ export default function TicketPreviewPanel({ previews, draft, selected, onLink, 
       <button type="button" className="button primary small-button" onClick={() => onLink(p)}><Link2 size={15} /> Vincular</button>
     </div>)}
 
-    {(selected || hasValues) && <div className="tp-summary" aria-label="Prévia do lançamento">
-      <div className="tp-summary-head"><span className="eyebrow">PRÉVIA DO LANÇAMENTO</span>
+    {(selected || hasValues) && <div className="tp-summary" aria-label="Resumo do lançamento">
+      <div className="tp-summary-head"><span className="eyebrow">RESUMO DO LANÇAMENTO</span>
         {selected?.payment_date && <span className="tp-pay"><CalendarClock size={14} /> Pagamento previsto {br(selected.payment_date)}</span>}</div>
       <div className="tp-grid">
         <div><small>Ticket</small><b>{draft.number || '—'}</b></div>
         <div><small>Peso</small><b>{summary.weight ? `${summary.weight.toLocaleString('pt-BR')} kg` : '—'}</b></div>
-        <div><small>Bruto</small><b>{money(summary.gross)}</b></div>
+        <div><small>Bruto</small><b>{draft.gross === '' ? '—' : money(summary.gross)}</b></div>
         <div><small>Desconto</small><b>{money(summary.discount)}</b></div>
-        <div className="tp-net"><small>Líquido a pagar</small><b>{money(summary.net)}</b></div>
+        <div className="tp-net"><small>Líquido a pagar</small><b>{draft.gross === '' ? '—' : money(summary.net)}</b></div>
         {selected && <div className={`tp-diff ${diff > 0 ? 'up' : diff < 0 ? 'down' : 'same'}`}><small>Vs. estimado ({money(summary.estimated)})</small><b>{diff === 0 ? 'Igual à prévia' : `${diff > 0 ? '+' : '−'}${money(Math.abs(diff))}`}</b></div>}
       </div>
       {!summary.valid && <p className="tp-warn" role="alert"><TriangleAlert size={15} /> {summary.issues[0]}</p>}
