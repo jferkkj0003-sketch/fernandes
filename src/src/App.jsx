@@ -3,7 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   ArrowDownToLine, ArrowUpRight, BadgeDollarSign, Check, ChevronDown,
   CircleHelp, ClipboardList, CreditCard, Eye, LayoutDashboard, Plus, Pencil,
-  Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
+  Database, Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import {
   clearCloudTicketScanCache, cloudConfigured, supabase, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, setCloudDriverActive, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
@@ -23,6 +23,7 @@ import { startOutlookHelper } from './lib/outlook-helper';
 import { appErrorMessage } from './lib/app-update';
 import History from './History';
 import Dashboard from './Dashboard';
+import { ReferenceConsultation, ReferenceReports } from './ReferencePages';
 import { downloadPreferences } from './lib/downloads';
 
 const initialTickets = [
@@ -37,11 +38,14 @@ const initialDrivers = [
 ];
 
 const navItems = [
-  { id: 'painel', label: 'Início', icon: LayoutDashboard },
+  { id: 'painel', label: 'Painel de Controle', icon: LayoutDashboard },
   { id: 'tickets', label: 'Tickets', icon: ClipboardList },
+  { id: 'motoristas', label: 'Motoristas', icon: Users },
+  { id: 'consulta', label: 'Consulta', icon: Search },
   { id: 'fechamentos', label: 'Fechamentos', icon: BadgeDollarSign },
   { id: 'solicitacoes', label: 'Histórico', icon: CreditCard },
-  { id: 'motoristas', label: 'Motoristas', icon: Truck },
+  { id: 'relatorios', label: 'Relatórios', icon: FileText },
+  { id: 'cadastros', label: 'Cadastros', icon: Database },
 ];
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -1012,18 +1016,17 @@ export default function App() {
       ) : authReady && !showLogin && (!cloudConfigured || cloudDataReady) ? (
         <>
           <aside id="main-navigation" className="sidebar" aria-label="Menu de navegação">
-            <div className="brand-row">
-              <img className="brand-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
-            </div>
+            <div className="brand-row reference-brand"><span className="reference-brand-icon"><Truck/></span><span><b>Controle de Fretes</b><small>Logística e Entregas</small></span></div>
             <div className="workspace-label">MENU PRINCIPAL</div>
             <nav className="nav-list" aria-label="Menu principal">
-              {navItems.filter(({ id }) => id !== 'motoristas' || isAdmin).map(({ id, label, icon: Icon }) => (
+              {navItems.filter(({ id }) => !['motoristas','cadastros'].includes(id) || isAdmin).map(({ id, label, icon: Icon }) => (
                 <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => setPage(id)}>
                   <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{id === 'tickets' && <span className="nav-count">{tickets.filter((ticket) => ticket.status === 'Aberto').length}</span>}
                 </button>
               ))}
+              <button className="nav-item reference-settings" type="button" onClick={()=>{setAccountMessage('');setAccountOpen(true)}}><Settings2 size={22}/><span>Configurações</span></button>
             </nav>
-            <div className="sidebar-spacer" />
+            <div className="sidebar-spacer" /><img className="reference-truck" src="/freight-truck.svg" alt="" aria-hidden="true"/>
             <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Usuário').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Usuário'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
           </aside>
 
@@ -1050,7 +1053,9 @@ export default function App() {
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} isAdmin={isAdmin} />}
               {page === 'fechamentos' && <Closures user={sessionUser} onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
               {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
-              {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
+              {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}              {page === 'consulta' && <ReferenceConsultation tickets={tickets} onView={setViewingTicket}/>}
+              {page === 'relatorios' && <ReferenceReports closures={closures} onPreview={(item)=>openClosurePdf(item,setNotice,setCloudBusy)} onDownload={(item)=>downloadClosurePdf(item,setNotice,setCloudBusy)}/>}
+              {page === 'cadastros' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive}/>}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
             </section>
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
@@ -1678,3 +1683,4 @@ function EditPasswordModal({ busy, error, onBack, onConfirm }) {
     </section>
   </div>;
 }
+
