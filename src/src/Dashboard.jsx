@@ -1,45 +1,59 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
 import { supabase } from './lib/cloud';
 import { driverOptions } from './lib/drivers';
-import { summarizeDriverPayments } from './lib/driver-payments';
 import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
-import PayHero from './PayHero';
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
-const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const shiftDays = (iso, days) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const dateISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const localToday = () => dateISO(new Date());
+const shiftDays = (iso, days) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + days); return dateISO(d); };
+const nextFridayISO = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + (5 - d.getDay() + 7) % 7); return dateISO(d); };
+const brShort = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const brFull = (iso) => iso.split('-').reverse().join('/');
 const formatWeight = (value) => { const w = Number(value || 0); return w >= 1000 ? `${(w / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t` : `${w.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`; };
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-const br = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+const firstName = (name) => String(name || '').split(/\s+/)[0];
+const COLORS = ['#2f7bff', '#22c55e', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
+const STATUS = [['all', 'Todos'], ['open', 'Em aberto'], ['waiting', 'Fechado'], ['requested', 'Solicitado'], ['paid', 'Pago'], ['preview', 'Aguardando ticket']];
 
-const AVATARS = ['#2358c4', '#128a57', '#6a40c8', '#b4531a', '#a02f6b', '#2a7f9e'];
-const nextFridayISO = (today) => { const d = new Date(`${today}T12:00:00`); d.setDate(d.getDate() + (5 - d.getDay() + 7) % 7); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const brShort = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
-const brFull = (iso) => iso.split('-').reverse().join('/');
-const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// Escala "bonita" para o eixo do gráfico de barras.
+function niceCeil(max) {
+  if (max <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(max));
+  return ([1, 2, 2.5, 5, 10].map((step) => step * magnitude).find((value) => value >= max)) || max;
+}
+
+function aggregate(list) {
+  const byDriver = new Map();
+  const totals = { tickets: 0, weight: 0, amount: 0, open: 0, preview: 0, previewCount: 0 };
+  for (const record of list) {
+    if (record.status === 'preview') { totals.preview += record.amount; totals.previewCount += 1; continue; }
+    if (!byDriver.has(record.key)) byDriver.set(record.key, { key: record.key, name: record.name, tickets: 0, weight: 0, amount: 0, open: 0 });
+    const row = byDriver.get(record.key);
+    row.tickets += 1; row.weight += record.weight; row.amount += record.amount;
+    totals.tickets += 1; totals.weight += record.weight; totals.amount += record.amount;
+    if (record.status === 'open') { row.open += record.amount; totals.open += record.amount; }
+  }
+  const rows = [...byDriver.values()].sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'pt-BR'));
+  return { rows, totals };
+}
 
 export default function Dashboard({ tickets, drivers: driverRecords, closures = [], goTo }) {
   const today = localToday();
+  const [range, setRange] = useState('all');
+  const [customStart, setCustomStart] = useState(() => shiftDays(localToday(), -29));
+  const [customEnd, setCustomEnd] = useState(() => localToday());
   const [driverFilter, setDriverFilter] = useState('Todos');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [previews, setPreviews] = useState([]);
-  const [previewError, setPreviewError] = useState('');
-  const [updatedAt, setUpdatedAt] = useState(() => new Date());
   const drivers = useMemo(() => driverOptions(driverRecords, tickets), [driverRecords, tickets]);
-  const invalidRange = Boolean(startDate && endDate && startDate > endDate);
 
   useEffect(() => {
     if (!supabase) return undefined;
     let cancelled = false;
     supabase.from('freight_previews').select('id, driver_id, loading_date, payment_date, amount, driver:drivers(name)').is('cancelled_at', null).is('ticket_id', null)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        setPreviewError(error ? 'Não foi possível carregar as prévias.' : '');
-        if (!error) setPreviews(data || []);
-        setUpdatedAt(new Date());
-      });
+      .then(({ data, error }) => { if (!cancelled && !error) setPreviews(data || []); });
     return () => { cancelled = true; };
   }, [tickets.length]);
 
@@ -54,129 +68,128 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     };
     return new Set(closures.filter((closure) => closure.paidAt || (closure.status === 'Solicitado' && !current(closure))).flatMap((closure) => closure.ticketIds || []));
   }, [closures]);
-  const { drivers: rows, totals } = useMemo(() => invalidRange
-    ? summarizeDriverPayments({ drivers: [], tickets: [], previews: [] })
-    : summarizeDriverPayments({ tickets, previews, paidTicketIds, drivers, driverFilter, start: startDate, end: endDate }),
-  [tickets, previews, paidTicketIds, drivers, driverFilter, startDate, endDate, invalidRange]);
 
-  const setRange = (start, end) => { setStartDate(start); setEndDate(end); };
-  const presets = [
-    ['Este mês', `${today.slice(0, 7)}-01`, today],
-    ['7 dias', shiftDays(today, -6), today],
-    ['30 dias', shiftDays(today, -29), today],
-    ['Tudo', '', ''],
-  ];
-  const activePreset = presets.find(([, s, e]) => s === startDate && e === endDate)?.[0];
-  const stamp = updatedAt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(', ', ' às ');
-  const periodLabel = startDate || endDate ? `${startDate ? br(startDate) : 'início'} a ${endDate ? br(endDate) : 'hoje'}` : 'todo o período';
+  const records = useMemo(() => {
+    const list = tickets.filter((ticket) => ticket.dateISO && (ticket.driverId || ticket.driver)).map((ticket) => {
+      const raw = ticket.requestStatus === 'Solicitado' || ticket.requestStatus === 'Aguardando envio' ? ticket.requestStatus : ticket.status || 'Aberto';
+      const status = paidTicketIds.has(ticket.id) ? 'paid' : raw === 'Solicitado' ? 'requested' : raw === 'Aberto' ? 'open' : 'waiting';
+      return { key: ticket.driverId || ticket.driver, name: ticket.driver || 'Motorista não identificado', date: ticket.dateISO, weight: Number(ticket.weight || 0), amount: Number(ticket.gross || 0) - Number(ticket.discount || 0), status };
+    });
+    for (const preview of previews) {
+      if (preview.driver_id && preview.loading_date) list.push({ key: preview.driver_id, name: preview.driver?.name || 'Motorista não identificado', date: preview.loading_date, weight: 0, amount: Number(preview.amount || 0), status: 'preview' });
+    }
+    return list;
+  }, [tickets, previews, paidTicketIds]);
 
+  // Semana de pagamento: sexta a quinta (fechamento na quinta, pagamento na sexta).
   const friday = nextFridayISO(today);
   const thursday = shiftDays(friday, -1);
-  const matchesFilters = (ticket) => {
-    const key = ticket.driverId || ticket.driver || '';
-    return ticket.dateISO && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate) && (driverFilter === 'Todos' || key === driverFilter);
-  };
-  const counts = useMemo(() => {
-    const result = { open: 0, waiting: 0, requested: 0, paid: 0 };
-    for (const ticket of tickets.filter(matchesFilters)) {
-      const status = ticket.requestStatus === 'Solicitado' || ticket.requestStatus === 'Aguardando envio' ? ticket.requestStatus : ticket.status || 'Aberto';
-      if (paidTicketIds.has(ticket.id)) result.paid += 1;
-      else if (status === 'Solicitado') result.requested += 1;
-      else if (status === 'Aberto') result.open += 1;
-      else result.waiting += 1;
-    }
-    return result;
-  }, [tickets, paidTicketIds, driverFilter, startDate, endDate]);
-  const closureDriver = (closure) => closure.driver || closure.driverName || '';
+  const weekStart = shiftDays(friday, -7);
+  const period = range === 'week' ? { start: weekStart, end: thursday }
+    : range === 'month' ? { start: `${today.slice(0, 7)}-01`, end: today }
+      : range === 'custom' ? { start: customStart, end: customEnd } : { start: '', end: '' };
+  const invalidRange = Boolean(period.start && period.end && period.start > period.end);
+
+  const select = (start, end) => records.filter((record) => (!start || record.date >= start) && (!end || record.date <= end)
+    && (driverFilter === 'Todos' || record.key === driverFilter) && (statusFilter === 'all' || record.status === statusFilter));
+  const main = useMemo(() => invalidRange ? aggregate([]) : aggregate(select(period.start, period.end)), [records, range, customStart, customEnd, driverFilter, statusFilter, today]);
+  const week = useMemo(() => aggregate(select(weekStart, thursday)), [records, driverFilter, statusFilter, today]);
+  const { rows, totals } = main;
+
+  const maxAmount = Math.max(0, ...rows.map((row) => row.amount));
+  const maxWeight = Math.max(0, ...rows.map((row) => row.weight));
+  const weightScale = niceCeil(maxWeight);
+  const ticks = [0, 1, 2, 3, 4].map((i) => (weightScale / 4) * i);
+  const periodLabel = range === 'all' ? 'Todo período' : `${period.start ? brFull(period.start) : 'início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
+
+  // Avisos que existiam no painel anterior (fechamentos pendentes, prévias, tickets em aberto).
   const waitingClosures = closures.filter((closure) => closure.status === 'Aguardando envio' && !closure.paidAt);
   const noDateClosures = closures.filter((closure) => closure.status === 'Solicitado' && !closure.paidAt && !closure.paymentDueDate);
-  const names = (list) => [...new Set(list.map(closureDriver).filter(Boolean))].join(' · ');
+  const openCount = records.filter((record) => record.status === 'open' && (driverFilter === 'Todos' || record.key === driverFilter)).length;
   const alerts = [
-    waitingClosures.length && { color: 'var(--violet)', title: `${waitingClosures.length} ${waitingClosures.length === 1 ? 'fechamento aguardando envio' : 'fechamentos aguardando envio'}`, text: names(waitingClosures) || 'Solicite o pagamento por e-mail', action: 'Solicitar', page: 'fechamentos' },
-    totals.previewCount && { color: 'var(--blue)', title: `${totals.previewCount} ${totals.previewCount === 1 ? 'prévia sem ticket vinculado' : 'prévias sem ticket vinculado'}`, text: 'Vincule quando o ticket chegar', action: 'Vincular', page: 'tickets' },
-    noDateClosures.length && { color: 'var(--amber)', title: `${noDateClosures.length} ${noDateClosures.length === 1 ? 'solicitação sem data de pagamento' : 'solicitações sem data de pagamento'}`, text: names(noDateClosures) || 'Defina a data de pagamento', action: 'Definir', page: 'fechamentos' },
-    counts.open && { color: 'var(--amber)', title: `${counts.open} ${counts.open === 1 ? 'ticket em aberto' : 'tickets em aberto'}`, text: `Entram no fechamento de quinta, ${brShort(thursday)}`, action: 'Fechar', page: 'fechamentos' },
+    waitingClosures.length && { color: 'var(--violet)', text: `${waitingClosures.length} ${waitingClosures.length === 1 ? 'fechamento aguardando envio' : 'fechamentos aguardando envio'}`, action: 'Solicitar', page: 'fechamentos' },
+    noDateClosures.length && { color: 'var(--amber)', text: `${noDateClosures.length} ${noDateClosures.length === 1 ? 'solicitação sem data de pagamento' : 'solicitações sem data de pagamento'}`, action: 'Definir', page: 'fechamentos' },
+    openCount && { color: 'var(--green)', text: `${openCount} ${openCount === 1 ? 'ticket em aberto' : 'tickets em aberto'} · fechamento na quinta, ${brShort(thursday)}`, action: 'Fechar', page: 'fechamentos' },
   ].filter(Boolean);
-  const steps = [
-    ['Em aberto', counts.open, totals.open, 'Ainda sem fechamento', 'var(--amber)'],
-    ['Fechado', counts.waiting, totals.waiting, 'Aguardando envio por e-mail', 'var(--violet)'],
-    ['Solicitado', counts.requested, totals.requested, 'Ciclo atual · encerra sexta 17h (Manaus)', 'var(--green)'],
-    ['Pago', counts.paid, totals.paid, 'Ciclos anteriores', 'var(--muted)'],
-  ];
-  const exportCsv = () => {
-    const header = ['Motorista', 'Viagens', 'Peso (kg)', 'Em aberto', 'Fechado', 'Solicitado', 'Prévia', 'A pagar'];
-    const lines = rows.map((row) => [row.name, row.trips, row.weight, row.open, row.waiting, row.requested, row.preview, row.payable]);
-    const csv = '\ufeff' + [header, ...lines].map((line) => line.map(csvCell).join(';')).join('\r\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = `valores-por-motorista-${today}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
 
-  const parts = [
-    { name: 'Solicitado por e-mail', note: `${counts.requested} ${counts.requested === 1 ? 'ticket' : 'tickets'} · pago na sexta`, value: totals.requested, color: 'var(--green)' },
-    { name: 'Fechado, a enviar', note: `${counts.waiting} ${counts.waiting === 1 ? 'ticket' : 'tickets'} · falta solicitar`, value: totals.waiting, color: 'var(--violet)' },
-    { name: 'Prévias sem ticket', note: `${totals.previewCount} ${totals.previewCount === 1 ? 'viagem' : 'viagens'} · ticket chega depois`, value: totals.preview, color: 'var(--blue)' },
-    { name: 'Em aberto', note: `${counts.open} ${counts.open === 1 ? 'ticket' : 'tickets'} · entram no fechamento`, value: totals.open, color: 'var(--amber)' },
-  ];
-  const average = totals.trips ? totals.payable / totals.trips : 0;
+  const chips = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Personalizado']];
 
-  return <>
+  return <div className="fd-page">
     <div className="page-heading">
-      <div><p className="eyebrow">Acompanhamento</p><h1>Painel de controle</h1><p className="page-subtitle">Semana de pagamento: sexta, {brFull(friday)} · fechamento na quinta, {brShort(thursday)}</p></div>
+      <div><p className="eyebrow">ACOMPANHAMENTO</p><h1>Painel de Controle</h1><p className="page-subtitle">Visão geral da operação, pesos, tickets e valores</p></div>
       <button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>
     </div>
 
-    <section className="panel dash-filters" aria-label="Filtros">
-      <div className="dash-presets" role="group" aria-label="Período rápido">
-        {presets.map(([label, s, e]) => <button key={label} type="button" className={activePreset === label ? 'active' : ''} onClick={() => setRange(s, e)}>{label}</button>)}
+    <section className="fd-card fd-filters" aria-label="Filtros">
+      <div className="fd-chips" role="group" aria-label="Período">{chips.map(([key, label]) => <button key={key} type="button" className={range === key ? 'on' : ''} onClick={() => setRange(key)}>{label}</button>)}</div>
+      <div className="fd-selects">
+        <label className="fd-select"><span>Motorista:</span><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? ' (inativo)' : ''}</option>)}</select><ChevronDown size={15} /></label>
+        <label className="fd-select"><span>Status:</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{STATUS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={15} /></label>
+        <div className="fd-period"><CalendarDays size={16} /><span>Período</span><b>{periodLabel}</b></div>
       </div>
-      <div className="dash-filter-fields">
-        <label>Motorista<select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? ' (inativo)' : ''}</option>)}</select></label>
-        <label>Data inicial<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
-        <label>Data final<input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></label>
-      </div>
+      {range === 'custom' && <div className="fd-dates"><label>De<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
       {invalidRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
     </section>
 
-    <section className="cx-top">
-      <PayHero label={`Previsão de pagamento · sexta, ${brShort(friday)}`} total={totals.payable} paid={totals.paid} parts={parts}
-        sub={`${totals.trips} ${totals.trips === 1 ? 'viagem' : 'viagens'} · ${formatWeight(totals.weight)} · ${rows.length} ${rows.length === 1 ? 'motorista' : 'motoristas'}`} />
-      <aside className="panel cx-attn" aria-label="Fazer agora">
-        <div className="cx-attn-head"><h2>Fazer agora</h2><span className="subtle-count">{alerts.length}</span></div>
-        {alerts.map((alert) => <div key={alert.title} className="cx-attn-item"><i style={{ background: alert.color }} /><div><strong>{alert.title}</strong><small>{alert.text}</small></div><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
-        {!alerts.length && <p className="empty-state">Tudo em dia. Nada pendente agora.</p>}
-      </aside>
+    <section className="fd-kpis" aria-label="Indicadores">
+      <div className="fd-kpi" style={{ '--c': 'var(--blue)' }}><span className="fd-kpi-ico"><Ticket size={26} /></span><div><small>Total de Tickets</small><strong>{totals.tickets.toLocaleString('pt-BR')}</strong></div></div>
+      <div className="fd-kpi" style={{ '--c': 'var(--violet)' }}><span className="fd-kpi-ico"><Weight size={26} /></span><div><small>Peso Total</small><strong>{formatWeight(totals.weight)}</strong></div></div>
+      <div className="fd-kpi" style={{ '--c': 'var(--green)' }}><span className="fd-kpi-ico"><BadgeDollarSign size={28} /></span><div><small>Valor Total</small><strong>{money(totals.amount)}</strong></div></div>
     </section>
 
-    <section className="panel" aria-label="Caminho do dinheiro">
-      <div className="panel-heading"><h2>Caminho do dinheiro</h2></div>
-      <div className="cx-steps" style={{ marginTop: 0 }}>
-        {steps.map(([name, count, value, note, color], index) => <div key={name} className="cx-step" style={{ '--sc': color }}><span>{index + 1} · {name}</span><strong>{count}</strong><em>{money(value)}</em><small>{note}</small></div>)}
-      </div>
-    </section>
+    {alerts.length > 0 && <section className="fd-alerts" aria-label="Precisa de atenção">
+      {alerts.map((alert) => <div key={alert.text} className="fd-alert"><i style={{ background: alert.color }} /><span>{alert.text}</span><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
+    </section>}
 
-    <section className="panel dash-drivers" aria-label="Valores por motorista" style={{ marginTop: 16 }}>
-      <div className="panel-heading"><h2>Valores por motorista</h2><button type="button" className="button secondary small-button" onClick={exportCsv} disabled={!rows.length}>Exportar CSV</button></div>
-      {previewError && <div className="notice">{previewError}</div>}
-      <div className="cx-table-wrap"><table className="cx-table">
-        <thead><tr><th>Motorista</th><th>Viagens</th><th>Peso</th><th>Em aberto</th><th>Fechado</th><th>Solicitado</th><th>Prévia</th><th>A pagar</th></tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={row.key}>
-          <td><span className="cx-name"><span className="cx-av" style={{ background: AVATARS[index % AVATARS.length] }}>{initials(row.name)}</span>{row.name}</span></td>
-          <td>{row.trips}</td><td>{row.weight ? formatWeight(row.weight) : '—'}</td>
-          <td>{row.open ? money(row.open) : '—'}</td><td>{row.waiting ? money(row.waiting) : '—'}</td><td>{row.requested ? money(row.requested) : '—'}</td><td>{row.preview ? money(row.preview) : '—'}</td>
-          <td className="cx-pay">{money(row.payable)}</td></tr>)}</tbody>
-        {rows.length > 0 && <tfoot><tr><td>Total</td><td>{totals.trips}</td><td>{formatWeight(totals.weight)}</td><td>{money(totals.open)}</td><td>{money(totals.waiting)}</td><td>{money(totals.requested)}</td><td>{money(totals.preview)}</td><td>{money(totals.payable)}</td></tr></tfoot>}
-      </table></div>
-      {!rows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
-    </section>
+    <div className="fd-two">
+      <section className="fd-card" aria-label="Valor por motorista">
+        <h2 className="fd-h2"><BadgeDollarSign size={20} /> Valor por Motorista <small>({periodLabel})</small></h2>
+        <div className="fd-hbars">
+          {rows.map((row, index) => <div key={row.key} className="fd-hbar"><span className="n">{row.name}</span>
+            <div className="track"><i style={{ width: `${maxAmount ? Math.max(6, (row.amount / maxAmount) * 100) : 0}%`, background: `linear-gradient(90deg, ${COLORS[index % COLORS.length]}, color-mix(in srgb, ${COLORS[index % COLORS.length]} 60%, #fff))` }} /></div>
+            <b>{money(row.amount)}</b></div>)}
+          {!rows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
+        </div>
+      </section>
 
-    <section className="cx-stats" aria-label="Resumo do período">
-      <div className="panel cx-stat"><span>Viagens no período</span><strong>{totals.trips.toLocaleString('pt-BR')}</strong><small>{totals.tickets} tickets + {totals.previewCount} prévias</small></div>
-      <div className="panel cx-stat"><span>Peso transportado</span><strong>{formatWeight(totals.weight)}</strong><small>Somente tickets</small></div>
-      <div className="panel cx-stat"><span>Valor a pagar</span><strong>{money(totals.payable)}</strong><small>Inclui prévias · atualizado em {stamp}</small></div>
-      <div className="panel cx-stat"><span>Valor médio por viagem</span><strong>{money(average)}</strong><small>{driverFilter === 'Todos' ? 'Todos os motoristas' : rows[0]?.name || 'Motorista'}</small></div>
-    </section>
-  </>;
+      <section className="fd-card" aria-label="Peso por motorista">
+        <h2 className="fd-h2"><Weight size={20} /> Peso por Motorista <small>({periodLabel})</small></h2>
+        {rows.length > 0 ? <div className="fd-vchart">
+          <div className="axis">{[...ticks].reverse().map((tick) => <span key={tick}>{formatWeight(tick)}</span>)}</div>
+          <div className="plot">
+            <div className="grid">{ticks.map((tick) => <i key={tick} />)}</div>
+            <div className="cols">{rows.map((row, index) => <div key={row.key} className="col">
+              <div className="barwrap" style={{ '--h': `${weightScale ? (row.weight / weightScale) * 100 : 0}%` }}><span className="val">{formatWeight(row.weight)}</span><i style={{ height: `${weightScale ? (row.weight / weightScale) * 100 : 0}%`, background: `linear-gradient(180deg, color-mix(in srgb, ${COLORS[index % COLORS.length]} 60%, #fff), ${COLORS[index % COLORS.length]})` }} /></div>
+              <span className="lbl">{firstName(row.name)}</span></div>)}</div>
+          </div>
+        </div> : <p className="empty-state">Nenhum peso para os filtros selecionados.</p>}
+      </section>
+    </div>
+
+    <div className="fd-two fd-two-wide">
+      <section className="fd-card" aria-label="Resumo da semana">
+        <h2 className="fd-h2"><CalendarDays size={20} /> Resumo da Semana</h2>
+        <p className="fd-sub"><span>Período: {brShort(weekStart)} a {brShort(thursday)}</span><span>Fechamento: Qui, {brShort(thursday)}</span><span>Pagamento: Sex, {brShort(friday)}</span></p>
+        <div className="fd-scroll"><table className="fd-table">
+          <thead><tr><th>Motorista</th><th>Tickets</th><th>Peso (t)</th><th>Valor (R$)</th><th>Em Aberto (R$)</th></tr></thead>
+          <tbody>{week.rows.map((row, index) => <tr key={row.key} style={{ '--c': COLORS[index % COLORS.length] }}>
+            <td><span className="who"><span className="av">{initials(row.name)}</span>{row.name}</span></td>
+            <td>{row.tickets}</td><td>{formatWeight(row.weight)}</td><td className="v">{money(row.amount)}</td><td className="o">{money(row.open)}</td></tr>)}</tbody>
+          {week.rows.length > 0 && <tfoot><tr><td>Total da Semana</td><td>{week.totals.tickets}</td><td>{formatWeight(week.totals.weight)}</td><td>{money(week.totals.amount)}</td><td className="o">{money(week.totals.open)}</td></tr></tfoot>}
+        </table></div>
+        {!week.rows.length && <p className="empty-state">Nenhum ticket nesta semana.</p>}
+      </section>
+
+      <section className="fd-card" aria-label="Resumo total">
+        <h2 className="fd-h2"><ClipboardList size={20} /> Resumo Total <small>({periodLabel})</small></h2>
+        <ul className="fd-total-list">
+          <li style={{ '--c': 'var(--blue)' }}><span className="ico"><Ticket size={20} /></span><span>Total de Tickets</span><b>{totals.tickets.toLocaleString('pt-BR')}</b></li>
+          <li style={{ '--c': 'var(--violet)' }}><span className="ico"><Weight size={20} /></span><span>Peso Total</span><b>{formatWeight(totals.weight)}</b></li>
+          <li style={{ '--c': 'var(--green)' }}><span className="ico"><BadgeDollarSign size={20} /></span><span>Valor Total</span><b>{money(totals.amount)}</b></li>
+          <li style={{ '--c': 'var(--amber)' }}><span className="ico"><Truck size={20} /></span><span>Em Aberto</span><b>{money(totals.open)}</b></li>
+          <li style={{ '--c': '#f97316' }}><span className="ico"><Hourglass size={20} /></span><span>Aguardando Ticket</span><b>{money(totals.preview)}</b></li>
+        </ul>
+      </section>
+    </div>
+  </div>;
 }
