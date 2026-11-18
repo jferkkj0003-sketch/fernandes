@@ -32,20 +32,6 @@ function formatModified(value) {
   return `${date.toLocaleDateString('pt-BR', { ...opts, day: '2-digit', month: '2-digit', year: 'numeric' })} às ${date.toLocaleTimeString('pt-BR', { ...opts, hour: '2-digit', minute: '2-digit' })}`;
 }
 
-// Quando o banco não informa a data (migração ainda não aplicada) ou houve exclusão, registra o momento em que
-// a mudança dos dados foi percebida neste aparelho. Na primeira visita não há como saber, então não inventa data.
-function trackObservedChange(token, data) {
-  const key = `dde-fretes-seen-${token.slice(0, 8)}`;
-  const { last_modified: _ignored, ...rest } = data || {};
-  const signature = JSON.stringify(rest);
-  try {
-    const previous = JSON.parse(window.localStorage.getItem(key) || 'null');
-    if (!previous) { window.localStorage.setItem(key, JSON.stringify({ signature, changedAt: null })); return null; }
-    if (previous.signature !== signature) { const next = { signature, changedAt: Date.now() }; window.localStorage.setItem(key, JSON.stringify(next)); return next.changedAt; }
-    return previous.changedAt;
-  } catch { return null; }
-}
-
 export default function SharedDashboard({ token }) {
   const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
   const [data, setData] = useState(null);
@@ -62,7 +48,7 @@ export default function SharedDashboard({ token }) {
   const [customEnd, setCustomEnd] = useState(() => dateISO(new Date()));
   const [driverFilter, setDriverFilter] = useState('');
   const [stale, setStale] = useState(false);
-  const [lastModified, setLastModified] = useState('');
+  const lastModified = data?.last_modified || '';
 
   async function refresh(silent = false) {
     if (!silent) setLoading(true); else setRefreshing(true);
@@ -72,9 +58,7 @@ export default function SharedDashboard({ token }) {
       const fresh = await loadSharedDashboard(token);
       setData(fresh);
       setStale(false);
-      const observed = trackObservedChange(token, fresh);
-      const times = [Date.parse(fresh.last_modified), observed].filter(Number.isFinite);
-      setLastModified(times.length ? new Date(Math.max(...times)).toISOString() : '');
+
     } catch {
       if (silent) { setStale(true); return; }
       setLoadError('Este link não existe mais ou foi desativado. Peça ao responsável um novo link.');

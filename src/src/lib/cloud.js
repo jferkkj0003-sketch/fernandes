@@ -457,23 +457,18 @@ export async function loadSharedClosingTickets(token, driver, start, end, offset
 
 export async function loadSharedDashboard(token) {
   const tokenHash = await sharedDashboardTokenHash(token);
-  const [dashboardResult, driverResult, paymentResult, previewResult] = await Promise.all([
+  const [dashboardResult, driverResult, paymentResult, previewResult, modifiedResult] = await Promise.all([
     supabase.rpc('get_shared_dashboard', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_driver_summary', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_closure_payments', { token_hash_input: tokenHash }),
     supabase.rpc('get_shared_freight_previews', { token_hash_input: tokenHash }),
+    Promise.resolve(supabase.rpc('get_shared_last_modified', { token_hash_input: tokenHash })).catch(() => ({ error: true })),
   ]);
   const error = dashboardResult.error || driverResult.error || paymentResult.error || previewResult.error;
   if (error) throw error;
-  // Data da última modificação gravada no banco. Opcional: se a migração ainda não foi aplicada, segue sem ela.
-  let lastModified = null;
-  try {
-    const { data, error: modifiedError } = await supabase.rpc('get_shared_last_modified', { token_hash_input: tokenHash });
-    if (!modifiedError && data) lastModified = data;
-  } catch { /* migração opcional */ }
   return {
-    last_modified: lastModified,
     ...dashboardResult.data,
+    last_modified: modifiedResult.error ? null : modifiedResult.data,
     drivers_by_day: driverResult.data?.drivers_by_day || [],
     closure_payments: paymentResult.data?.closure_payments || [],
     freight_previews: previewResult.data || [],
