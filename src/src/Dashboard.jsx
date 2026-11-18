@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgeDollarSign, CalendarDays, ChevronRight, ClipboardList, Plus, Truck, UserRound, Wallet, Weight, Info, Route, Tag } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { supabase } from './lib/cloud';
 import { driverOptions } from './lib/drivers';
 import { summarizeDriverPayments } from './lib/driver-payments';
 import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
+import PayHero from './PayHero';
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -12,9 +13,11 @@ const formatWeight = (value) => { const w = Number(value || 0); return w >= 1000
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 const br = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
 
-function KPI({ icon: Icon, label, value, foot, tint }) {
-  return <div className={`kpi kpi-${tint}`}><span className="kpi-icon"><Icon size={26} strokeWidth={1.7} /></span><div><span className="kpi-label">{label}</span><strong className="kpi-value">{value}</strong>{foot && <small className="kpi-foot">{foot}</small>}</div></div>;
-}
+const AVATARS = ['#2358c4', '#128a57', '#6a40c8', '#b4531a', '#a02f6b', '#2a7f9e'];
+const nextFridayISO = (today) => { const d = new Date(`${today}T12:00:00`); d.setDate(d.getDate() + (5 - d.getDay() + 7) % 7); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const brShort = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+const brFull = (iso) => iso.split('-').reverse().join('/');
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 export default function Dashboard({ tickets, drivers: driverRecords, closures = [], goTo }) {
   const today = localToday();
@@ -67,9 +70,61 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const stamp = updatedAt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(', ', ' às ');
   const periodLabel = startDate || endDate ? `${startDate ? br(startDate) : 'início'} a ${endDate ? br(endDate) : 'hoje'}` : 'todo o período';
 
+  const friday = nextFridayISO(today);
+  const thursday = shiftDays(friday, -1);
+  const matchesFilters = (ticket) => {
+    const key = ticket.driverId || ticket.driver || '';
+    return ticket.dateISO && (!startDate || ticket.dateISO >= startDate) && (!endDate || ticket.dateISO <= endDate) && (driverFilter === 'Todos' || key === driverFilter);
+  };
+  const counts = useMemo(() => {
+    const result = { open: 0, waiting: 0, requested: 0, paid: 0 };
+    for (const ticket of tickets.filter(matchesFilters)) {
+      const status = ticket.requestStatus === 'Solicitado' || ticket.requestStatus === 'Aguardando envio' ? ticket.requestStatus : ticket.status || 'Aberto';
+      if (paidTicketIds.has(ticket.id)) result.paid += 1;
+      else if (status === 'Solicitado') result.requested += 1;
+      else if (status === 'Aberto') result.open += 1;
+      else result.waiting += 1;
+    }
+    return result;
+  }, [tickets, paidTicketIds, driverFilter, startDate, endDate]);
+  const closureDriver = (closure) => closure.driver || closure.driverName || '';
+  const waitingClosures = closures.filter((closure) => closure.status === 'Aguardando envio' && !closure.paidAt);
+  const noDateClosures = closures.filter((closure) => closure.status === 'Solicitado' && !closure.paidAt && !closure.paymentDueDate);
+  const names = (list) => [...new Set(list.map(closureDriver).filter(Boolean))].join(' · ');
+  const alerts = [
+    waitingClosures.length && { color: 'var(--violet)', title: `${waitingClosures.length} ${waitingClosures.length === 1 ? 'fechamento aguardando envio' : 'fechamentos aguardando envio'}`, text: names(waitingClosures) || 'Solicite o pagamento por e-mail', action: 'Solicitar', page: 'fechamentos' },
+    totals.previewCount && { color: 'var(--blue)', title: `${totals.previewCount} ${totals.previewCount === 1 ? 'prévia sem ticket vinculado' : 'prévias sem ticket vinculado'}`, text: 'Vincule quando o ticket chegar', action: 'Vincular', page: 'tickets' },
+    noDateClosures.length && { color: 'var(--amber)', title: `${noDateClosures.length} ${noDateClosures.length === 1 ? 'solicitação sem data de pagamento' : 'solicitações sem data de pagamento'}`, text: names(noDateClosures) || 'Defina a data de pagamento', action: 'Definir', page: 'fechamentos' },
+    counts.open && { color: 'var(--amber)', title: `${counts.open} ${counts.open === 1 ? 'ticket em aberto' : 'tickets em aberto'}`, text: `Entram no fechamento de quinta, ${brShort(thursday)}`, action: 'Fechar', page: 'fechamentos' },
+  ].filter(Boolean);
+  const steps = [
+    ['Em aberto', counts.open, totals.open, 'Ainda sem fechamento', 'var(--amber)'],
+    ['Fechado', counts.waiting, totals.waiting, 'Aguardando envio por e-mail', 'var(--violet)'],
+    ['Solicitado', counts.requested, totals.requested, 'Ciclo atual · encerra sexta 17h (Manaus)', 'var(--green)'],
+    ['Pago', counts.paid, totals.paid, 'Ciclos anteriores', 'var(--muted)'],
+  ];
+  const exportCsv = () => {
+    const header = ['Motorista', 'Viagens', 'Peso (kg)', 'Em aberto', 'Fechado', 'Solicitado', 'Prévia', 'A pagar'];
+    const lines = rows.map((row) => [row.name, row.trips, row.weight, row.open, row.waiting, row.requested, row.preview, row.payable]);
+    const csv = '\ufeff' + [header, ...lines].map((line) => line.map(csvCell).join(';')).join('\r\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = `valores-por-motorista-${today}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const parts = [
+    { name: 'Solicitado por e-mail', note: `${counts.requested} ${counts.requested === 1 ? 'ticket' : 'tickets'} · pago na sexta`, value: totals.requested, color: 'var(--green)' },
+    { name: 'Fechado, a enviar', note: `${counts.waiting} ${counts.waiting === 1 ? 'ticket' : 'tickets'} · falta solicitar`, value: totals.waiting, color: 'var(--violet)' },
+    { name: 'Prévias sem ticket', note: `${totals.previewCount} ${totals.previewCount === 1 ? 'viagem' : 'viagens'} · ticket chega depois`, value: totals.preview, color: 'var(--blue)' },
+    { name: 'Em aberto', note: `${counts.open} ${counts.open === 1 ? 'ticket' : 'tickets'} · entram no fechamento`, value: totals.open, color: 'var(--amber)' },
+  ];
+  const average = totals.trips ? totals.payable / totals.trips : 0;
+
   return <>
     <div className="page-heading">
-      <div><p className="eyebrow">ACOMPANHAMENTO</p><h1>Painel de controle</h1><p className="page-subtitle">Logística e entregas · {periodLabel}</p></div>
+      <div><p className="eyebrow">Acompanhamento</p><h1>Painel de controle</h1><p className="page-subtitle">Semana de pagamento: sexta, {brFull(friday)} · fechamento na quinta, {brShort(thursday)}</p></div>
       <button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>
     </div>
 
@@ -85,45 +140,43 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       {invalidRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
     </section>
 
-    <section className="dash-kpis" aria-label="Indicadores">
-      <KPI icon={Tag} tint="blue" label="Total de tickets" value={totals.tickets.toLocaleString('pt-BR')} foot="Tickets lançados" />
-      <KPI icon={BadgeDollarSign} tint="green" label="Total da prévia" value={money(totals.preview)} foot={`${totals.previewCount} ${totals.previewCount === 1 ? 'viagem' : 'viagens'} sem ticket`} />
-      <KPI icon={Weight} tint="violet" label="Peso transportado" value={formatWeight(totals.weight)} foot="Somente tickets" />
-      <KPI icon={Route} tint="amber" label="Viagens no período" value={totals.trips.toLocaleString('pt-BR')} foot="Tickets + prévias" />
+    <section className="cx-top">
+      <PayHero label={`Previsão de pagamento · sexta, ${brShort(friday)}`} total={totals.payable} paid={totals.paid} parts={parts}
+        sub={`${totals.trips} ${totals.trips === 1 ? 'viagem' : 'viagens'} · ${formatWeight(totals.weight)} · ${rows.length} ${rows.length === 1 ? 'motorista' : 'motoristas'}`} />
+      <aside className="panel cx-attn" aria-label="Precisa de atenção">
+        <div className="cx-attn-head"><h2>Precisa de atenção</h2><span className="subtle-count">{alerts.length}</span></div>
+        {alerts.map((alert) => <div key={alert.title} className="cx-attn-item"><i style={{ background: alert.color }} /><div><strong>{alert.title}</strong><small>{alert.text}</small></div><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
+        {!alerts.length && <p className="empty-state">Tudo em dia. Nada pendente agora.</p>}
+      </aside>
     </section>
 
-    <section className="dash-pay" aria-label="Total a pagar">
-      <div className="dash-pay-main"><span className="dash-pay-icon"><Wallet size={28} strokeWidth={1.7} /></span><div><span className="dash-pay-label">Total a ser pago</span><strong className="dash-pay-value">{money(totals.payable)}</strong><small>{driverFilter === 'Todos' ? 'Todos os motoristas' : rows[0]?.name || 'Motorista'} · inclui prévias{totals.paid ? ` · já pago antes: ${money(totals.paid)}` : ''}</small></div></div>
-      <dl className="dash-pay-split">
-        <div className="s-amber"><dt>Em aberto</dt><dd>{money(totals.open)}</dd></div>
-        <div className="s-violet"><dt>Fechado</dt><dd>{money(totals.waiting)}</dd></div>
-        <div className="s-green"><dt>Solicitado (semana)</dt><dd>{money(totals.requested)}</dd></div>
-        <div className="s-blue"><dt>Prévia</dt><dd>{money(totals.preview)}</dd></div>
-      </dl>
-    </section>
-
-    <section className="panel dash-drivers" aria-label="Valores por motorista">
-      <div className="panel-heading"><h2><span className="heading-icon"><Truck size={17} /></span> Motoristas</h2><button type="button" className="button secondary small-button" onClick={() => goTo('motoristas')}>Ver detalhes <ChevronRight size={15} /></button></div>
-      {previewError && <div className="notice">{previewError}</div>}
-      <div className="dash-driver-list">
-        {rows.map((row, index) => <article key={row.key} className={`dash-driver c-${index % 4}`}>
-          <span className="dash-avatar">{initials(row.name) || <UserRound size={20} />}</span>
-          <div className="dash-driver-main">
-            <strong>{row.name}</strong>
-            <span className="dash-driver-status"><Truck size={13} /> {row.trips} {row.trips === 1 ? 'viagem' : 'viagens'}{row.weight ? ` · ${formatWeight(row.weight)}` : ''}</span>
-            <small>{[row.open ? `Em aberto ${money(row.open)}` : '', row.waiting ? `Fechado ${money(row.waiting)}` : '', row.requested ? `Solicitado ${money(row.requested)}` : '', row.preview ? `Prévia ${money(row.preview)}` : '', row.paid ? `Já pago ${money(row.paid)}` : ''].filter(Boolean).join(' · ') || 'Sem valores no período'}</small>
-          </div>
-          <div className="dash-driver-total"><span>A pagar</span><strong>{money(row.payable)}</strong></div>
-        </article>)}
-        {!rows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
+    <section className="panel" aria-label="Andamento dos tickets">
+      <div className="panel-heading"><h2>Andamento dos tickets</h2></div>
+      <div className="cx-steps" style={{ marginTop: 0 }}>
+        {steps.map(([name, count, value, note, color]) => <div key={name} className="cx-step" style={{ '--sc': color }}><span>{name}</span><strong>{count}</strong><em>{money(value)}</em><small>{note}</small></div>)}
       </div>
-      {rows.length > 1 && <div className="dash-driver-sum"><span><Wallet size={18} /> Total de todos os motoristas</span><strong>{money(totals.payable)}</strong></div>}
     </section>
 
-    <section className="dash-summary" aria-label="Resumo do período">
-      <span className="dash-summary-icon"><Info size={22} /></span>
-      <div><strong>Resumo do período</strong><small>Dados atualizados em: {stamp}</small></div>
-      <div className="dash-summary-nums"><span><b>{totals.tickets}</b> tickets</span><span><b>{totals.previewCount}</b> prévias</span><span><b>{rows.length}</b> motoristas</span></div>
+    <section className="panel dash-drivers" aria-label="Valores por motorista" style={{ marginTop: 16 }}>
+      <div className="panel-heading"><h2>Valores por motorista</h2><button type="button" className="button secondary small-button" onClick={exportCsv} disabled={!rows.length}>Exportar CSV</button></div>
+      {previewError && <div className="notice">{previewError}</div>}
+      <div className="cx-table-wrap"><table className="cx-table">
+        <thead><tr><th>Motorista</th><th>Viagens</th><th>Peso</th><th>Em aberto</th><th>Fechado</th><th>Solicitado</th><th>Prévia</th><th>A pagar</th></tr></thead>
+        <tbody>{rows.map((row, index) => <tr key={row.key}>
+          <td><span className="cx-name"><span className="cx-av" style={{ background: AVATARS[index % AVATARS.length] }}>{initials(row.name)}</span>{row.name}</span></td>
+          <td>{row.trips}</td><td>{row.weight ? formatWeight(row.weight) : '—'}</td>
+          <td>{row.open ? money(row.open) : '—'}</td><td>{row.waiting ? money(row.waiting) : '—'}</td><td>{row.requested ? money(row.requested) : '—'}</td><td>{row.preview ? money(row.preview) : '—'}</td>
+          <td className="cx-pay">{money(row.payable)}</td></tr>)}</tbody>
+        {rows.length > 0 && <tfoot><tr><td>Total</td><td>{totals.trips}</td><td>{formatWeight(totals.weight)}</td><td>{money(totals.open)}</td><td>{money(totals.waiting)}</td><td>{money(totals.requested)}</td><td>{money(totals.preview)}</td><td>{money(totals.payable)}</td></tr></tfoot>}
+      </table></div>
+      {!rows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
+    </section>
+
+    <section className="cx-stats" aria-label="Resumo do período">
+      <div className="panel cx-stat"><span>Viagens no período</span><strong>{totals.trips.toLocaleString('pt-BR')}</strong><small>{totals.tickets} tickets + {totals.previewCount} prévias</small></div>
+      <div className="panel cx-stat"><span>Peso transportado</span><strong>{formatWeight(totals.weight)}</strong><small>Somente tickets</small></div>
+      <div className="panel cx-stat"><span>Valor a pagar</span><strong>{money(totals.payable)}</strong><small>Inclui prévias · atualizado em {stamp}</small></div>
+      <div className="panel cx-stat"><span>Valor médio por viagem</span><strong>{money(average)}</strong><small>{driverFilter === 'Todos' ? 'Todos os motoristas' : rows[0]?.name || 'Motorista'}</small></div>
     </section>
   </>;
 }

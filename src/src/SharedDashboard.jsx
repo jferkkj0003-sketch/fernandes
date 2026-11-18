@@ -1,19 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, ClipboardList, CreditCard, Mail, FolderCheck, RefreshCw, Truck, Weight, Sun, Moon } from 'lucide-react';
+import { AlertCircle, RefreshCw, Sun, Moon } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import OverviewCharts from './OverviewCharts';
 import FreightForecast from './FreightForecast';
 import { requestArchiveAt } from './lib/request-cycle';
 import { consultationSummary } from './lib/consultation';
+import { sharedPaymentSummary } from './lib/shared-payments';
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const dateISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const monthISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-const formatWeight = (value) => value === null ? 'Peso indisponível' : `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg`;
-
-function KPI({ icon: Icon, title, value, foot, tint }) {
-  return <div className={`kpi kpi-${tint}`}><span className="kpi-icon"><Icon size={24} strokeWidth={1.7} /></span><div><span className="kpi-label">{title}</span><strong className="kpi-value">{money(value.amount)}</strong><small className="kpi-foot">{foot} · {formatWeight(value.weight)}</small></div></div>;
-}
 
 export default function SharedDashboard({ token }) {
   const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
@@ -26,6 +22,7 @@ export default function SharedDashboard({ token }) {
   const [customStart, setCustomStart] = useState(() => dateISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [customEnd, setCustomEnd] = useState(() => dateISO(new Date()));
   const [driverFilter, setDriverFilter] = useState('');
+  const [stale, setStale] = useState(false);
 
   async function refresh(silent = false) {
     if (!silent) setLoading(true);
@@ -33,8 +30,9 @@ export default function SharedDashboard({ token }) {
     try {
       if (!cloudConfigured) throw new Error('O painel não está conectado ao banco de dados.');
       setData(await loadSharedDashboard(token));
+      setStale(false);
     } catch {
-      if (silent) return;
+      if (silent) { setStale(true); return; }
       setLoadError('Este link não existe mais ou foi desativado. Peça ao responsável um novo link.');
       setData(null);
     } finally {
@@ -81,13 +79,14 @@ export default function SharedDashboard({ token }) {
   const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || []), ...(data?.freight_previews || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
   const summary = useMemo(() => consultationSummary(data, period, driverFilter, now), [data, period, driverFilter, now]);
+  const alreadyPaid = useMemo(() => sharedPaymentSummary(data, period, driverFilter).closed.paid, [data, period, driverFilter]);
 
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={refresh}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
 
   const presets = [['week', '7 dias'], ['month', 'Mês'], ['all', 'Tudo'], ['custom', 'Datas']];
   return <main className="shared-dashboard">
-    <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><span>ACOMPANHAMENTO</span><h1>Painel de controle</h1></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
+    <header className="shared-header"><div className="shared-header-brand"><img src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" /><div><h1>Pagamentos da semana</h1><div className={`cx-live${stale ? ' off' : ''}`}>{stale ? 'Sem conexão · mostrando os últimos dados' : 'Atualizado agora · ao vivo'}</div></div></div><button className="icon-button theme-toggle shared-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button></header>
     <section className="panel dash-filters" aria-label="Filtros">
       <div className="dash-presets" role="group" aria-label="Filtrar período">{presets.map(([key, label]) => <button key={key} type="button" className={range === key ? 'active' : ''} onClick={() => setRange(key)}>{label}</button>)}</div>
       <div className="dash-filter-fields">
@@ -101,13 +100,8 @@ export default function SharedDashboard({ token }) {
       ? <div className="shared-error"><AlertCircle size={17} /> A data inicial precisa ser anterior ou igual à data final.</div>
       : <>
         <p className="shared-view-context">{range === 'all' ? 'Todo o período' : [period.start, period.end].map((date) => date ? date.split('-').reverse().join('/') : 'Sem limite').join(' a ')} · {driverFilter || 'Todos os motoristas'} · <span className="shared-view-badge">Somente consulta</span></p>
-        <FreightForecast data={data} driver={driverFilter} period={period} />
-        <section className="dash-kpis" aria-label="Resumo da operação por situação">
-          <KPI icon={ClipboardList} tint="amber" title="Em aberto" value={summary.open} foot="Sem fechamento" />
-          <KPI icon={FolderCheck} tint="violet" title="Fechados" value={summary.waiting} foot="Aguardando envio" />
-          <KPI icon={Mail} tint="blue" title="Solicitados" value={summary.requested} foot="Ciclo atual" />
-          <KPI icon={CreditCard} tint="green" title="Total geral" value={summary.total} foot="Com histórico" />
-        </section>
+        <FreightForecast data={data} driver={driverFilter} period={period} paid={alreadyPaid} />
+        {alreadyPaid > 0 && <section className="panel cx-paidcard"><div><strong>Já pago</strong><br /><small className="mut">Ciclos anteriores · fora do total</small></div><strong>{money(alreadyPaid)}</strong></section>}
         <p className="consultation-cycle-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral.</p>
         <details className="dash-charts"><summary>Gráficos do período</summary>
           <OverviewCharts rows={summary.total.ranked} dailyRows={data?.drivers_by_day || []} period={period} driver={driverFilter} />

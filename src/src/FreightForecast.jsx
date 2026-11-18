@@ -1,40 +1,45 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Truck, Wallet } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { freightForecast } from './lib/freight-forecast';
+import PayHero from './PayHero';
 
 const money = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const money0 = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const nextFriday = () => { const date = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Manaus' }) + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + (5 - date.getUTCDay() + 7) % 7); return date.toISOString().slice(0, 10); };
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+const dayLabel = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+const AVATARS = ['#2358c4', '#128a57', '#6a40c8', '#b4531a', '#a02f6b', '#2a7f9e'];
+const STATES = [['requested', 'Solicitado', 'var(--green)'], ['waiting', 'Fechado', 'var(--violet)'], ['preview', 'Prévia', 'var(--blue)'], ['open', 'Em aberto', 'var(--amber)']];
 
-export default function FreightForecast({ data, driver, period }) {
+// Tela "Pagamentos da semana": valor previsto para a data de pagamento, por situação e por motorista.
+export default function FreightForecast({ data, driver, period, paid = 0 }) {
   const [date, setDate] = useState(nextFriday);
   const forecast = useMemo(() => freightForecast(data, date, driver, period), [data, date, driver, period]);
   const sum = (field) => forecast.drivers.reduce((total, row) => total + Math.round(row[field] * 100), 0) / 100;
+  const parts = [
+    { name: 'Solicitado por e-mail', note: 'ciclo atual', value: sum('requested'), color: 'var(--green)' },
+    { name: 'Fechado, a enviar', note: 'falta solicitar', value: sum('waiting'), color: 'var(--violet)' },
+    { name: 'Prévias sem ticket', note: 'ticket chega depois', value: sum('preview'), color: 'var(--blue)' },
+    { name: 'Em aberto', note: 'entram no fechamento', value: sum('open'), color: 'var(--amber)' },
+  ];
   return <>
-    <section className="dash-pay" aria-label="Total a ser pago">
-      <div className="dash-pay-main"><span className="dash-pay-icon"><Wallet size={28} strokeWidth={1.7} /></span><div><span className="dash-pay-label">Total a ser pago</span><strong className="dash-pay-value">{money(forecast.total)}</strong><small>{driver || 'Todos os motoristas'} · inclui prévias</small></div></div>
-      <dl className="dash-pay-split">
-        <div className="s-amber"><dt>Em aberto</dt><dd>{money(sum('open'))}</dd></div>
-        <div className="s-violet"><dt>Fechado</dt><dd>{money(sum('waiting'))}</dd></div>
-        <div className="s-green"><dt>Solicitado</dt><dd>{money(sum('requested'))}</dd></div>
-        <div className="s-blue"><dt>Prévia</dt><dd>{money(sum('preview'))}</dd></div>
-      </dl>
+    <PayHero label={`Pagamento em ${dayLabel(date)}`} total={forecast.total} paid={paid}
+      sub={`${driver || 'Todos os motoristas'} · ${forecast.drivers.length} ${forecast.drivers.length === 1 ? 'motorista' : 'motoristas'}`} parts={parts} />
+    <div className="cx-section-head"><h2>Por motorista</h2>
+      <label className="dash-paydate"><CalendarDays size={15} /> Pagamento em <input aria-label="Data das solicitações e prévias" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label></div>
+    <section className="cx-drivers" aria-label="Valores por motorista">
+      {forecast.drivers.map((row, index) => {
+        const detail = STATES.filter(([key]) => row[key] > 0).map(([key, name]) => `${name} ${money0(row[key])}`).join(' · ');
+        return <article key={row.name} className="panel cx-drv">
+          <div className="cx-who"><span className="cx-av" style={{ background: AVATARS[index % AVATARS.length] }}>{initials(row.name)}</span>
+            <div><strong>{row.name}</strong><small>{row.openCount ? `${row.openCount} ${row.openCount === 1 ? 'ticket em aberto' : 'tickets em aberto'}` : 'Valor previsto'}</small></div></div>
+          <div className="cx-mini">{STATES.map(([key, , color]) => <div key={key} style={{ flex: Math.max(row[key], 0), background: color }} />)}</div>
+          <p className="cx-detail">{detail || 'Sem valores no período'}</p>
+          <div className="cx-row"><span>A pagar</span><strong>{money(row.amount)}</strong></div>
+        </article>;
+      })}
+      {!forecast.drivers.length && <p className="empty-state">Nenhum valor previsto para os filtros selecionados.</p>}
     </section>
-    <section className="panel dash-drivers" aria-label="Valores por motorista">
-      <div className="panel-heading"><h2><span className="heading-icon"><Truck size={17} /></span> Motoristas</h2>
-        <label className="dash-paydate"><CalendarDays size={15} /> Pagamento em <input aria-label="Data das solicitações e prévias" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label></div>
-      <div className="dash-driver-list">
-        {forecast.drivers.map((row, index) => <article key={row.name} className={`dash-driver c-${index % 4}`}>
-          <span className="dash-avatar">{initials(row.name)}</span>
-          <div className="dash-driver-main"><strong>{row.name}</strong>
-            <span className="dash-driver-status"><Truck size={13} /> {row.openCount ? `${row.openCount} ${row.openCount === 1 ? 'ticket em aberto' : 'tickets em aberto'}` : 'Valor previsto'}</span>
-            <small>{[row.open ? `Em aberto ${money(row.open)}` : '', row.waiting ? `Fechado ${money(row.waiting)}` : '', row.requested ? `Solicitado ${money(row.requested)}` : '', row.preview ? `Prévia ${money(row.preview)}` : ''].filter(Boolean).join(' · ')}</small></div>
-          <div className="dash-driver-total"><span>A pagar</span><strong>{money(row.amount)}</strong></div>
-        </article>)}
-        {!forecast.drivers.length && <p className="empty-state">Nenhum valor previsto para os filtros selecionados.</p>}
-      </div>
-      {forecast.drivers.length > 1 && <div className="dash-driver-sum"><span><Wallet size={18} /> Total de todos os motoristas</span><strong>{money(forecast.total)}</strong></div>}
-      <p className="dash-note">Inclui tickets em aberto e fechamentos aguardando envio, além das solicitações e prévias com pagamento na data escolhida. Tickets vinculados a prévias são contados uma vez.</p>
-    </section>
+    <p className="dash-note">Inclui tickets em aberto e fechamentos aguardando envio, além das solicitações e prévias com pagamento na data escolhida. Tickets vinculados a prévias são contados uma vez.</p>
   </>;
 }
