@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
 import { supabase } from './lib/cloud';
-import DriverValueChart, { driverColors } from './DriverValueChart';
+import FreightCharts from './ConsultationValueChart';
+import { driverColors } from './DriverValueChart';
 import { driverOptions } from './lib/drivers';
 import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
 
@@ -14,26 +15,29 @@ const brShort = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const brFull = (iso) => iso.split('-').reverse().join('/');
 const formatWeight = (value) => { const w = Number(value || 0); return w >= 1000 ? `${(w / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t` : `${w.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`; };
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-const firstName = (name) => String(name || '').split(/\s+/)[0];
 const STATUS = [['all', 'Todos'], ['open', 'Em aberto'], ['waiting', 'Fechado'], ['requested', 'Solicitado'], ['paid', 'Pago'], ['preview', 'Aguardando ticket']];
-
-// Escala "bonita" para o eixo do gráfico de barras.
-function niceCeil(max) {
-  if (max <= 0) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(max));
-  return ([1, 2, 2.5, 5, 10].map((step) => step * magnitude).find((value) => value >= max)) || max;
-}
 
 function aggregate(list) {
   const byDriver = new Map();
   const totals = { tickets: 0, weight: 0, amount: 0, open: 0, preview: 0, previewCount: 0 };
   for (const record of list) {
-    if (record.status === 'preview') { totals.preview += record.amount; totals.previewCount += 1; continue; }
-    if (!byDriver.has(record.key)) byDriver.set(record.key, { key: record.key, name: record.name, tickets: 0, weight: 0, amount: 0, open: 0 });
+    if (!byDriver.has(record.key)) {
+      byDriver.set(record.key, { key: record.key, name: record.name, tickets: 0, weight: 0, amount: 0, preview: 0 });
+    }
     const row = byDriver.get(record.key);
-    row.tickets += 1; row.weight += record.weight; row.amount += record.amount;
-    totals.tickets += 1; totals.weight += record.weight; totals.amount += record.amount;
-    if (record.status === 'open') { row.open += record.amount; totals.open += record.amount; }
+    row.amount += record.amount;
+    totals.amount += record.amount;
+    if (record.status === 'preview') {
+      row.preview += record.amount;
+      totals.preview += record.amount;
+      totals.previewCount += 1;
+      continue;
+    }
+    row.tickets += 1;
+    row.weight += record.weight;
+    totals.tickets += 1;
+    totals.weight += record.weight;
+    if (record.status === 'open') totals.open += record.amount;
   }
   const rows = [...byDriver.values()].sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'pt-BR'));
   return { rows, totals };
@@ -93,14 +97,13 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const select = (start, end) => records.filter((record) => (!start || record.date >= start) && (!end || record.date <= end)
     && (driverFilter === 'Todos' || record.key === driverFilter) && (statusFilter === 'all' || record.status === statusFilter));
   const main = useMemo(() => invalidRange ? aggregate([]) : aggregate(select(period.start, period.end)), [records, range, customStart, customEnd, driverFilter, statusFilter, today]);
-  // Resumo da semana: só tickets EM ABERTO de cada motorista, de qualquer data (inclui os da semana passada que ainda não fecharam).
-  const week = useMemo(() => aggregate(records.filter((record) => record.status === 'open' && (driverFilter === 'Todos' || record.key === driverFilter))), [records, driverFilter]);
+  // O próximo fechamento inclui tickets em aberto e cargas já previstas até quinta.
+  const week = useMemo(() => aggregate(records.filter((record) =>
+    (record.status === 'open' || (record.status === 'preview' && record.date <= thursday))
+    && (driverFilter === 'Todos' || record.key === driverFilter))), [records, driverFilter, thursday]);
   const { rows, totals } = main;
   const colorOf = (key) => driverColors[Math.max(0, drivers.findIndex((driver) => driver.key === key)) % driverColors.length];
 
-  const maxWeight = Math.max(0, ...rows.map((row) => row.weight));
-  const weightScale = niceCeil(maxWeight);
-  const ticks = [0, 1, 2, 3, 4].map((i) => (weightScale / 4) * i);
   const periodLabel = range === 'all' ? 'Todo período' : `${period.start ? brFull(period.start) : 'início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
 
   // Avisos que existiam no painel anterior (fechamentos pendentes, prévias, tickets em aberto).
@@ -142,35 +145,20 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       {alerts.map((alert) => <div key={alert.text} className="fd-alert"><i style={{ background: alert.color }} /><span>{alert.text}</span><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
     </section>}
 
-    <div className="fd-two">
-      <DriverValueChart rows={rows} periodLabel={periodLabel} colorFor={colorOf} />
-
-      <section className="fd-card fd-glass-chart" aria-label="Peso por motorista">
-        <h2 className="fd-h2"><Weight size={20} /> Peso por Motorista <small>({periodLabel})</small></h2>
-        {rows.length > 0 ? <div className="fd-vchart">
-          <div className="axis">{[...ticks].reverse().map((tick) => <span key={tick}>{tick === 0 ? '0' : formatWeight(tick)}</span>)}</div>
-          <div className="plot">
-            <div className="grid">{ticks.map((tick) => <i key={tick} />)}</div>
-            <div className="cols">{rows.map((row) => <div key={row.key} className="col">
-              <div className="barwrap" style={{ '--h': `${weightScale ? (row.weight / weightScale) * 100 : 0}%` }}><span className="val">{formatWeight(row.weight)}</span><i style={{ height: `${weightScale ? (row.weight / weightScale) * 100 : 0}%`, '--bar-color': colorOf(row.key) }} /></div>
-              <span className="lbl" title={row.name}>{firstName(row.name)}</span></div>)}</div>
-          </div>
-        </div> : <p className="empty-state">Nenhum peso para os filtros selecionados.</p>}
-      </section>
-    </div>
+    <FreightCharts rows={rows} periodLabel={periodLabel} colorFor={colorOf} formatWeight={formatWeight} />
 
     <div className="fd-two fd-two-wide">
       <section className="fd-card" aria-label="Resumo da semana">
         <h2 className="fd-h2"><CalendarDays size={20} /> Resumo da Semana <small>(em aberto)</small></h2>
-        <p className="fd-sub"><span>Somente tickets em aberto</span><span>Fechamento: Qui, {brShort(thursday)}</span><span>Pagamento: Sex, {brShort(friday)}</span></p>
+        <p className="fd-sub"><span>Tickets em aberto e prévias pendentes</span><span>Fechamento: Qui, {brShort(thursday)}</span><span>Pagamento: Sex, {brShort(friday)}</span></p>
         <div className="fd-scroll"><table className="fd-table">
-          <thead><tr><th>Motorista</th><th>Tickets</th><th>Peso (t)</th><th>Em aberto (R$)</th></tr></thead>
+          <thead><tr><th>Motorista</th><th>Tickets</th><th>Peso (t)</th><th>Prévias (R$)</th><th>Valor total (R$)</th></tr></thead>
           <tbody>{week.rows.map((row) => <tr key={row.key} style={{ '--c': colorOf(row.key) }}>
             <td><span className="who"><span className="av">{initials(row.name)}</span>{row.name}</span></td>
-            <td>{row.tickets}</td><td>{formatWeight(row.weight)}</td><td className="v">{money(row.amount)}</td></tr>)}</tbody>
-          {week.rows.length > 0 && <tfoot><tr><td>Total da Semana</td><td>{week.totals.tickets}</td><td>{formatWeight(week.totals.weight)}</td><td>{money(week.totals.amount)}</td></tr></tfoot>}
+            <td>{row.tickets}</td><td>{formatWeight(row.weight)}</td><td>{row.preview ? money(row.preview) : '—'}</td><td className="v">{money(row.amount)}</td></tr>)}</tbody>
+          {week.rows.length > 0 && <tfoot><tr><td>Total da Semana</td><td>{week.totals.tickets}</td><td>{formatWeight(week.totals.weight)}</td><td>{money(week.totals.preview)}</td><td>{money(week.totals.amount)}</td></tr></tfoot>}
         </table></div>
-        {!week.rows.length && <p className="empty-state">Nenhum ticket em aberto.</p>}
+        {!week.rows.length && <p className="empty-state">Nenhum ticket em aberto ou prévia pendente.</p>}
       </section>
 
       <section className="fd-card" aria-label="Resumo total">

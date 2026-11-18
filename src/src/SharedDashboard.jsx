@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
-import ConsultationCharts from './ConsultationValueChart';
-import { closingValueRows } from './lib/consultation-chart-data';
+import FreightCharts from './ConsultationValueChart';
 import { consultationPeriodSummary } from './lib/consultation-period';
 import './consultation-panel.css';
 import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
@@ -148,8 +147,7 @@ export default function SharedDashboard({ token }) {
       .sort((a, b) => b.payable - a.payable || a.name.localeCompare(b.name, 'pt-BR'));
     const payable = { count: confirmed.count + sPreview.count, amount: confirmed.amount + sPreview.amount };
     const overall = consultationPeriodSummary(data, period, driverFilter);
-    const valueRows = closingValueRows(data, [...waiting, ...requested], previews, calc, driverFilter);
-    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, payable, rows, overall, valueRows };
+    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, payable, rows, overall };
   }, [data, period, driverFilter, now]);
 
   const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
@@ -259,15 +257,12 @@ export default function SharedDashboard({ token }) {
       </>}
 
       <p className="fx-note">Na sexta-feira, às 17h de Manaus, as solicitações encerram o ciclo e permanecem no total geral.</p>
-      <ConsultationCharts
-        valueRows={scope === 'history' ? data?.drivers_by_day || [] : view.valueRows}
-        weightRows={scope === 'history'
-          ? view.overall.ranked.map((row) => ({ name: row.driver, weight: row.weight }))
-          : view.rows}
-        period={period}
-        driver={driverFilter}
+      <FreightCharts
+        rows={scope === 'history'
+          ? view.overall.ranked.map((row) => ({ key: row.driver, name: row.driver, amount: row.amount, weight: row.weight }))
+          : view.rows.map((row) => ({ ...row, key: row.name, amount: row.payable }))}
         periodLabel={periodLabel}
-        valueTitle={scope === 'history' ? 'Valor dos fretes' : 'Valor a pagar'}
+        valueTitle={scope === 'history' ? 'Valor dos fretes por motorista' : 'Valor a pagar por motorista'}
         formatWeight={fmtWeight}
       />
     </div>}
