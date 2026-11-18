@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, RefreshCw, BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
+import { BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
 import { supabase } from './lib/cloud';
 import { driverOptions } from './lib/drivers';
 import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
@@ -14,7 +14,7 @@ const brFull = (iso) => iso.split('-').reverse().join('/');
 const formatWeight = (value) => { const w = Number(value || 0); return w >= 1000 ? `${(w / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t` : `${w.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`; };
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 const firstName = (name) => String(name || '').split(/\s+/)[0];
-const COLORS = ['#00baf5', '#00e787', '#a04dff', '#ffb000', '#ff4c92', '#06d4e8'];
+const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 const STATUS = [['all', 'Todos'], ['open', 'Em aberto'], ['waiting', 'Fechado'], ['requested', 'Solicitado'], ['paid', 'Pago'], ['preview', 'Aguardando ticket']];
 
 // Escala "bonita" para o eixo do gráfico de barras.
@@ -105,9 +105,6 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const ticks = [0, 1, 2, 3, 4].map((i) => (weightScale / 4) * i);
   const periodLabel = range === 'all' ? 'Todo período' : `${period.start ? brFull(period.start) : 'início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
 
-  const dates = records.map(record=>record.date).filter(Boolean).sort();
-  const displayedPeriod = range === 'all' ? (dates.length ? `${brFull(dates[0])} – ${brFull(dates.at(-1))}` : 'Sem lançamentos') : periodLabel;
-
   // Avisos que existiam no painel anterior (fechamentos pendentes, prévias, tickets em aberto).
   const waitingClosures = closures.filter((closure) => closure.status === 'Aguardando envio' && !closure.paidAt);
   const noDateClosures = closures.filter((closure) => closure.status === 'Solicitado' && !closure.paidAt && !closure.paymentDueDate);
@@ -121,10 +118,9 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const chips = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Personalizado']];
 
   return <div className="fd-page">
-    <div className="fd-reference-heading">
-      <div className="fd-heading-copy"><BarChart3 aria-hidden="true"/><div><h1>Painel de Controle</h1><p>Visão geral da operação, pesos, tickets e valores</p></div></div>
-      <button type="button" className="fd-date-control" onClick={()=>setRange('custom')} aria-label="Personalizar período"><CalendarDays/><span>Período<b>{displayedPeriod}</b></span><ChevronDown size={20}/></button>
-      <button type="button" className="fd-refresh" aria-label="Atualizar painel" onClick={()=>window.location.reload()}><RefreshCw/></button>
+    <div className="page-heading">
+      <div><p className="eyebrow">ACOMPANHAMENTO</p><h1>Painel de Controle</h1><p className="page-subtitle">Visão geral da operação, pesos, tickets e valores</p></div>
+      <button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>
     </div>
 
     <section className="fd-card fd-filters" aria-label="Filtros">
@@ -132,7 +128,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       <div className="fd-selects">
         <label className="fd-select"><span>Motorista:</span><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option>Todos</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? ' (inativo)' : ''}</option>)}</select><ChevronDown size={15} /></label>
         <label className="fd-select"><span>Status:</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{STATUS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={15} /></label>
-
+        <div className="fd-period"><CalendarDays size={16} /><span>Período</span><b>{periodLabel}</b></div>
       </div>
       {range === 'custom' && <div className="fd-dates"><label>De<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
       {invalidRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
@@ -144,7 +140,9 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       <div className="fd-kpi" style={{ '--c': '#10b981' }}><span className="fd-kpi-ico"><BadgeDollarSign size={28} /></span><div><small>Valor Total</small><strong>{money(totals.amount)}</strong></div></div>
     </section>
 
-
+    {alerts.length > 0 && <section className="fd-alerts" aria-label="Precisa de atenção">
+      {alerts.map((alert) => <div key={alert.text} className="fd-alert"><i style={{ background: alert.color }} /><span>{alert.text}</span><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
+    </section>}
 
     <div className="fd-two">
       <section className="fd-card" aria-label="Valor por motorista">
@@ -158,7 +156,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       </section>
 
       <section className="fd-card" aria-label="Peso por motorista">
-        <h2 className="fd-h2"><BarChart3 size={20} /> Peso por Motorista <small>({periodLabel})</small></h2>
+        <h2 className="fd-h2"><Weight size={20} /> Peso por Motorista <small>({periodLabel})</small></h2>
         {rows.length > 0 ? <div className="fd-vchart">
           <div className="axis">{[...ticks].reverse().map((tick) => <span key={tick}>{tick === 0 ? '0' : formatWeight(tick)}</span>)}</div>
           <div className="plot">
@@ -178,7 +176,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
         <div className="fd-scroll"><table className="fd-table">
           <thead><tr><th>Motorista</th><th>Tickets</th><th>Peso (t)</th><th>Em aberto (R$)</th></tr></thead>
           <tbody>{week.rows.map((row) => <tr key={row.key} style={{ '--c': colorOf(row.key) }}>
-            <td><span className="who"><span className="av">{initials(row.name)}</span><span>{row.name}<small className="fd-driver-status"><i/>Em aberto</small></span></span></td>
+            <td><span className="who"><span className="av">{initials(row.name)}</span>{row.name}</span></td>
             <td>{row.tickets}</td><td>{formatWeight(row.weight)}</td><td className="v">{money(row.amount)}</td></tr>)}</tbody>
           {week.rows.length > 0 && <tfoot><tr><td>Total da Semana</td><td>{week.totals.tickets}</td><td>{formatWeight(week.totals.weight)}</td><td>{money(week.totals.amount)}</td></tr></tfoot>}
         </table></div>
@@ -186,7 +184,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       </section>
 
       <section className="fd-card" aria-label="Resumo total">
-        <h2 className="fd-h2"><BarChart3 size={20} /> Resumo Total <small>({periodLabel})</small></h2>
+        <h2 className="fd-h2"><ClipboardList size={20} /> Resumo Total <small>({periodLabel})</small></h2>
         <ul className="fd-total-list">
           <li style={{ '--c': '#3b82f6' }}><span className="ico"><Ticket size={20} /></span><span>Total de Tickets</span><b>{totals.tickets.toLocaleString('pt-BR')}</b></li>
           <li style={{ '--c': '#8b5cf6' }}><span className="ico"><Weight size={20} /></span><span>Peso Total</span><b>{formatWeight(totals.weight)}</b></li>
@@ -196,9 +194,5 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
         </ul>
       </section>
     </div>
-    {alerts.length > 0 && <section className="fd-alerts" aria-label="Precisa de atenção">
-      {alerts.map((alert) => <div key={alert.text} className="fd-alert"><i style={{ background: alert.color }} /><span>{alert.text}</span><button type="button" onClick={() => goTo(alert.page)}>{alert.action}</button></div>)}
-    </section>}
   </div>;
 }
-
