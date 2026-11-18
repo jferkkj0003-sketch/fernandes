@@ -1,4 +1,4 @@
-const palette = ['#3b82f6', '#15a578', '#a274ed', '#df961e', '#e45785', '#16a9cd', '#dd6954', '#8ca624'];
+const palette = ['#ef4444', '#eab308', '#3083f0', '#15a578', '#a274ed', '#e45785', '#16a9cd', '#8ca624'];
 
 export function makeDriverColorMap(keys) {
   const uniqueKeys = [...new Set(keys)];

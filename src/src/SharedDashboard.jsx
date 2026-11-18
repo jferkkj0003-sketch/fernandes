@@ -50,6 +50,7 @@ export default function SharedDashboard({ token }) {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [datesOpen, setDatesOpen] = useState(false);
   const [range, setRange] = useState('all');
   const [scope, setScope] = useState('open');
   const [now, setNow] = useState(() => new Date());
@@ -170,26 +171,31 @@ export default function SharedDashboard({ token }) {
     <header className="fx-header">
       <span className="fx-logo"><Truck size={28} strokeWidth={2} /></span>
       <div className="fx-title"><h1>Controle de Fretes <small>– Controladoria</small></h1><p>Consulta, fechamento e valores por motorista</p></div>
-      <div className={`fx-date${stale ? ' off' : ''}`}><CalendarDays size={20} /><div><small className="fx-date-label">Última modificação</small><b>{formatModified(lastModified) || '—'}</b>{stale && <small>Sem conexão · exibindo dados anteriores</small>}</div></div>
-      <button type="button" className="fx-icon-btn" onClick={() => refresh(true)} aria-label="Atualizar agora"><RefreshCw size={22} className={refreshing ? 'fx-spin' : ''} /></button>
-      <button type="button" className="fx-icon-btn" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
-    </header>
-
-    <section className="fx-card" aria-label="Visão da consulta">
+      <div className="fx-header-actions">
       <div className="fx-chips fx-consultation-tabs" role="tablist" aria-label="Visão da consulta">
         <button id="consultation-open-tab" role="tab" aria-selected={scope === 'open'} aria-controls="consultation-content" className={scope === 'open' ? 'on' : ''} onClick={() => setScope('open')}>Fechamento em aberto</button>
         <button id="consultation-history-tab" role="tab" aria-selected={scope === 'history'} aria-controls="consultation-content" className={scope === 'history' ? 'on' : ''} onClick={() => setScope('history')}>Período completo</button>
       </div>
-    </section>
-
-    <section className="fx-card fx-filters" aria-label="Filtros">
-      <div className="fx-chips" role="group" aria-label="Período">{presets.map(([key, label]) => <button key={key} type="button" className={range === key ? 'on' : ''} onClick={() => setRange(key)}>{label}</button>)}</div>
-      <div className="fx-fields">
-        <label className="fx-field"><span>Motorista</span><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
-        {range === 'month' && <label className="fx-field"><span>Mês</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
-        <label className="fx-field"><span>Data inicial</span><input type="date" value={period.start} max={period.end || undefined} onChange={(event) => { setCustomStart(event.target.value); setCustomEnd(period.end); setRange('custom'); }} /></label><label className="fx-field"><span>Data final</span><input type="date" value={period.end} min={period.start || undefined} onChange={(event) => { setCustomStart(period.start); setCustomEnd(event.target.value); setRange('custom'); }} /></label>
+      <div className={`fx-date${stale ? ' off' : ''}`}><CalendarDays size={20} /><div><small className="fx-date-label">Última modificação</small><b>{formatModified(lastModified) || '—'}</b>{stale && <small>Sem conexão · exibindo dados anteriores</small>}</div></div>
+      <button type="button" className="fx-icon-btn" onClick={() => refresh(true)} aria-label="Atualizar agora"><RefreshCw size={22} className={refreshing ? 'fx-spin' : ''} /></button>
+      <button type="button" className="fx-icon-btn" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
       </div>
-      {(range === 'week' || range === 'month') && <div className="fx-period"><CalendarDays size={16} />{range === 'week' ? `Semana ${periodLabel}` : periodLabel}</div>}
+    </header>
+
+    <section className="fx-compact-filters" aria-label="Filtros da consulta">
+      <label className="fx-field"><span>Motorista</span><select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">Todos</option>{driverNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+      <button type="button" className="fx-date-filter-toggle" aria-expanded={datesOpen}
+        aria-controls="consultation-date-filters" onClick={() => setDatesOpen((open) => !open)}>
+        <CalendarDays size={16} /> {datesOpen ? 'Recolher datas' : 'Filtrar por data'}
+      </button>
+      <div className="fx-card fx-date-filter-panel" id="consultation-date-filters" hidden={!datesOpen}>
+        <div className="fx-chips" role="group" aria-label="Período">{presets.map(([key, label]) => <button key={key} type="button" className={range === key ? 'on' : ''} onClick={() => setRange(key)}>{label}</button>)}</div>
+        <div className="fx-fields">
+          {range === 'month' && <label className="fx-field"><span>Mês</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
+          <label className="fx-field"><span>Data inicial</span><input type="date" value={period.start} max={period.end || undefined} onChange={(event) => { setCustomStart(event.target.value); setCustomEnd(period.end); setRange('custom'); }} /></label>
+          <label className="fx-field"><span>Data final</span><input type="date" value={period.end} min={period.start || undefined} onChange={(event) => { setCustomStart(period.start); setCustomEnd(event.target.value); setRange('custom'); }} /></label>
+        </div>
+      </div>
     </section>
 
     {invalidRange ? <div className="fx-alert danger"><AlertCircle size={18} /> A data inicial precisa ser anterior ou igual à data final.</div> : <div id="consultation-content" role="tabpanel" aria-labelledby={scope === 'open' ? 'consultation-open-tab' : 'consultation-history-tab'}>
