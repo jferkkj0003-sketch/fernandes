@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, Check, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Weight, Wallet } from 'lucide-react';
+import { AlertCircle, CalendarDays, Check, ChevronRight, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight, Wallet } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import OverviewCharts from './OverviewCharts';
 import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
@@ -141,10 +141,11 @@ export default function SharedDashboard({ token }) {
 
   return <main className="fx-page">
     <header className="fx-header">
-      <img className="fx-logo" src={logo} alt="Controle de Fretes" />
-      <div className="fx-title"><h1>Controle de Fretes</h1><p className={stale ? 'off' : ''}>{stale ? 'Sem conexão · últimos dados' : <Ago at={updatedAt} />}</p></div>
-      <button type="button" className="fx-icon-btn" onClick={() => refresh(true)} aria-label="Atualizar agora"><RefreshCw size={18} className={refreshing ? 'fx-spin' : ''} /></button>
-      <button type="button" className="fx-icon-btn" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
+      <span className="fx-logo"><Truck size={28} strokeWidth={2} /></span>
+      <div className="fx-title"><h1>Controle de Fretes <small>– Controladoria</small></h1><p>Consulta, fechamento e valores por motorista</p></div>
+      <div className={`fx-date${stale ? ' off' : ''}`}><CalendarDays size={20} /><div><b>{brFull(dateISO(now))}</b><small>{stale ? 'Sem conexão' : <Ago at={updatedAt} />}</small></div></div>
+      <button type="button" className="fx-icon-btn" onClick={() => refresh(true)} aria-label="Atualizar agora"><RefreshCw size={22} className={refreshing ? 'fx-spin' : ''} /></button>
+      <button type="button" className="fx-icon-btn" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
     </header>
 
     <section className="fx-card fx-filters" aria-label="Filtros">
@@ -168,25 +169,26 @@ export default function SharedDashboard({ token }) {
       </section>
 
       <section className="fx-kpis" aria-label="Indicadores">
-        <div className="fx-kpi" style={{ '--c': 'var(--blue)' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><div><small>Tickets confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div></div>
-        <div className="fx-kpi" style={{ '--c': 'var(--violet)' }}><span className="fx-kpi-ico"><Weight size={20} /></span><div><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></div></div>
-        <div className="fx-kpi" style={{ '--c': 'var(--green)' }}><span className="fx-kpi-ico"><Layers size={20} /></span><div><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div></div>
-        <div className="fx-kpi" style={{ '--c': 'var(--amber)' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><div><small>Aguardando ticket</small><strong>{money(view.preview.amount)}</strong></div></div>
-        <div className="fx-kpi total" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Check size={22} /></span><div><small>Total a pagar (confirmado)</small><strong>{money(view.confirmed.amount)}</strong></div></div>
+        <div className="fx-kpi" style={{ '--c': '#2f7bff' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
+        <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></div>
+        <div className="fx-kpi" style={{ '--c': '#22c55e' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
+        <div className="fx-kpi" style={{ '--c': '#f59e0b' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><small>Aguardando Ticket</small><strong>{money(view.preview.amount)}</strong></div>
+        <div className="fx-kpi total" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar (confirmado)</small><strong>{money(view.confirmed.amount)}</strong></div>
       </section>
 
       <div className="fx-grid">
         <section className="fx-card" aria-label="Valores por motorista">
-          <h2 className="fx-h2"><Truck size={18} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
-          <div className="fx-drivers">
-            {view.rows.map((row, index) => <article key={row.name} className="fx-driver" style={{ '--c': AVATARS[index % AVATARS.length] }}>
-              <span className="fx-avatar">{initials(row.name)}</span>
-              <div className="fx-driver-info"><strong>{row.name}</strong><small>{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></div>
-              <div className="fx-driver-values"><b>{money(row.confirmed)}</b>{row.waiting > 0 && <small className="wait">+ {money(row.waiting)} aguardando</small>}</div>
-            </article>)}
+          <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
+          <div className="fx-table">
+            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Confirmado</span><span>Aguardando</span><span /></div>
+            {view.rows.map((row, index) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
+              <span className="who"><span className="fx-avatar">{initials(row.name)}</span><span className="nm"><b>{row.name}</b><small className="sub">{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></span></span>
+              <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span>
+              <span className="c">{money(row.confirmed)}</span><span className="a">{row.waiting > 0 ? money(row.waiting) : '—'}</span><ChevronRight size={18} className="go" />
+            </div>)}
             {!view.rows.length && <p className="fx-empty">Nenhum valor para os filtros selecionados.</p>}
           </div>
-          {view.rows.length > 0 && <div className="fx-total-row"><span>Total</span><span>{view.confirmed.count} · {fmtWeight(view.confirmed.weight)}</span><b>{money(view.confirmed.amount)}</b>{view.preview.amount > 0 && <em>{money(view.preview.amount)}</em>}</div>}
+          {view.rows.length > 0 && <div className="fx-total-bar"><b>{range === 'week' ? 'Total da Semana' : 'Total'}</b><span className="t">{view.confirmed.count}</span><span className="w">{fmtWeight(view.confirmed.weight)}</span><span className="c">{money(view.confirmed.amount)}</span><span className="a">{money(view.preview.amount)}</span></div>}
         </section>
 
         <div className="fx-stack">

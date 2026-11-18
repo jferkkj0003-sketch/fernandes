@@ -95,6 +95,8 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const main = useMemo(() => invalidRange ? aggregate([]) : aggregate(select(period.start, period.end)), [records, range, customStart, customEnd, driverFilter, statusFilter, today]);
   const week = useMemo(() => aggregate(select(weekStart, thursday)), [records, driverFilter, statusFilter, today]);
   const { rows, totals } = main;
+  // cor fixa por motorista (mesma cor nos gráficos e na tabela da semana)
+  const colorOf = (key) => { const i = rows.findIndex((row) => row.key === key); return COLORS[(i < 0 ? week.rows.findIndex((row) => row.key === key) : i) % COLORS.length]; };
 
   const maxAmount = Math.max(0, ...rows.map((row) => row.amount));
   const maxWeight = Math.max(0, ...rows.map((row) => row.weight));
@@ -155,7 +157,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       <section className="fd-card" aria-label="Peso por motorista">
         <h2 className="fd-h2"><Weight size={20} /> Peso por Motorista <small>({periodLabel})</small></h2>
         {rows.length > 0 ? <div className="fd-vchart">
-          <div className="axis">{[...ticks].reverse().map((tick) => <span key={tick}>{formatWeight(tick)}</span>)}</div>
+          <div className="axis">{[...ticks].reverse().map((tick) => <span key={tick}>{tick === 0 ? '0' : formatWeight(tick)}</span>)}</div>
           <div className="plot">
             <div className="grid">{ticks.map((tick) => <i key={tick} />)}</div>
             <div className="cols">{rows.map((row, index) => <div key={row.key} className="col">
@@ -172,7 +174,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
         <p className="fd-sub"><span>Período: {brShort(weekStart)} a {brShort(thursday)}</span><span>Fechamento: Qui, {brShort(thursday)}</span><span>Pagamento: Sex, {brShort(friday)}</span></p>
         <div className="fd-scroll"><table className="fd-table">
           <thead><tr><th>Motorista</th><th>Tickets</th><th>Peso (t)</th><th>Valor (R$)</th><th>Em Aberto (R$)</th></tr></thead>
-          <tbody>{week.rows.map((row, index) => <tr key={row.key} style={{ '--c': COLORS[index % COLORS.length] }}>
+          <tbody>{week.rows.map((row) => <tr key={row.key} style={{ '--c': colorOf(row.key) }}>
             <td><span className="who"><span className="av">{initials(row.name)}</span>{row.name}</span></td>
             <td>{row.tickets}</td><td>{formatWeight(row.weight)}</td><td className="v">{money(row.amount)}</td><td className="o">{money(row.open)}</td></tr>)}</tbody>
           {week.rows.length > 0 && <tfoot><tr><td>Total da Semana</td><td>{week.totals.tickets}</td><td>{formatWeight(week.totals.weight)}</td><td>{money(week.totals.amount)}</td><td className="o">{money(week.totals.open)}</td></tr></tfoot>}
