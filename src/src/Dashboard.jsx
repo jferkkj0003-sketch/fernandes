@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
 import { supabase } from './lib/cloud';
 import FreightCharts from './ConsultationValueChart';
-import { driverColors } from './DriverValueChart';
+import { makeDriverColorMap } from './lib/driver-colors';
 import { driverOptions } from './lib/drivers';
 import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cycle';
 
@@ -51,7 +51,6 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const [driverFilter, setDriverFilter] = useState('Todos');
   const [statusFilter, setStatusFilter] = useState('all');
   const [previews, setPreviews] = useState([]);
-  const drivers = useMemo(() => driverOptions(driverRecords, tickets), [driverRecords, tickets]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -85,6 +84,11 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     return list;
   }, [tickets, previews, paidTicketIds]);
 
+  const drivers = useMemo(() => driverOptions(driverRecords, records.map((record) => ({
+    driverId: record.key, driver: record.name,
+  }))), [driverRecords, records]);
+  const driverColorMap = useMemo(() => makeDriverColorMap(drivers.map((driver) => driver.key)), [drivers]);
+
   // Semana de pagamento: sexta a quinta (fechamento na quinta, pagamento na sexta).
   const friday = nextFridayISO(today);
   const thursday = shiftDays(friday, -1);
@@ -102,7 +106,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     (record.status === 'open' || (record.status === 'preview' && record.date <= thursday))
     && (driverFilter === 'Todos' || record.key === driverFilter))), [records, driverFilter, thursday]);
   const { rows, totals } = main;
-  const colorOf = (key) => driverColors[Math.max(0, drivers.findIndex((driver) => driver.key === key)) % driverColors.length];
+  const colorOf = (key) => driverColorMap.get(key);
 
   const periodLabel = range === 'all' ? 'Todo período' : `${period.start ? brFull(period.start) : 'início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
 

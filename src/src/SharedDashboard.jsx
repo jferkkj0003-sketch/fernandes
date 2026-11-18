@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
 import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
 import FreightCharts from './ConsultationValueChart';
+import { makeDriverColorMap } from './lib/driver-colors';
 import { consultationPeriodSummary } from './lib/consultation-period';
 import './consultation-panel.css';
 import { isCurrentRequest, requestArchiveAt } from './lib/request-cycle';
@@ -18,7 +19,6 @@ const nextFriday = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d
 const brShort = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const brFull = (iso) => iso.split('-').reverse().join('/');
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-const AVATARS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 const sum = (list, field) => list.reduce((total, item) => total + (Number(item[field]) || 0), 0);
 
 // Data da última modificação (fuso de Manaus), ex.: "18/11/2026 às 08:15".
@@ -121,6 +121,9 @@ export default function SharedDashboard({ token }) {
 
   const driverNames = useMemo(() => [...new Set([...(data?.drivers_by_day || []), ...(data?.closure_payments || []), ...(data?.freight_previews || [])].map((row) => row.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [data]);
 
+  const driverColorMap = useMemo(() => makeDriverColorMap(driverNames), [driverNames]);
+  const colorOf = (name) => driverColorMap.get(name);
+
   const view = useMemo(() => {
     const calc = period;
     const inPeriod = (day) => (!calc.start || day >= calc.start) && (!calc.end || day <= calc.end);
@@ -213,7 +216,7 @@ export default function SharedDashboard({ token }) {
           <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
           <div className="fx-table">
             <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Em carregamento</span><span>Valor total</span></div>
-            {view.rows.map((row, index) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
+            {view.rows.map((row) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': colorOf(row.name) }}>
               <span className="who"><span className="fx-avatar">{initials(row.name)}</span><span className="nm"><b>{row.name}</b><small className="sub">{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></span></span>
               <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span>
               <span className="a">{row.waiting > 0 ? <><small className="fx-mobile-label">Em carregamento: </small>{money(row.waiting)}</> : '—'}</span><span className="c">{money(row.payable)}</span>
@@ -246,7 +249,7 @@ export default function SharedDashboard({ token }) {
           <h2 className="fx-h2"><Users size={20} /> Resumo por motorista <small>({periodLabel})</small></h2>
           <div className="fx-table fx-history-table">
             <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Valor total</span></div>
-            {view.overall.ranked.map((row, index) => <div key={row.driver} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
+            {view.overall.ranked.map((row) => <div key={row.driver} className="fx-tr fx-row" style={{ '--c': colorOf(row.driver) }}>
               <span className="who"><span className="fx-avatar">{initials(row.driver)}</span><span className="nm"><b>{row.driver}</b><small className="sub">{row.count} tickets · {fmtWeight(row.weight)}</small></span></span>
               <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span><span className="c">{money(row.amount)}</span>
             </div>)}
@@ -264,6 +267,7 @@ export default function SharedDashboard({ token }) {
         periodLabel={periodLabel}
         valueTitle={scope === 'history' ? 'Valor dos fretes por motorista' : 'Valor a pagar por motorista'}
         formatWeight={fmtWeight}
+        colorFor={colorOf}
       />
     </div>}
     <footer className="fx-footer">Atualiza sozinho a cada 30 segundos · Acesso somente para consulta</footer>

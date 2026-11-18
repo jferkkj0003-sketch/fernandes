@@ -1,7 +1,6 @@
 import React from 'react';
 import { BadgeDollarSign } from 'lucide-react';
 
-export const driverColors = ['#2365ab', '#127864', '#6651a2', '#a46a29', '#a04572', '#247c91'];
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function DriverValueChart({ rows, periodLabel, colorFor, title = 'Valor por motorista' }) {
@@ -11,11 +10,11 @@ export default function DriverValueChart({ rows, periodLabel, colorFor, title = 
   return <section className="fd-card fd-glass-chart" aria-label={title}>
     <h2 className="fd-h2"><BadgeDollarSign size={20} /> {title} <small>({periodLabel})</small></h2>
     <ul className="fd-hbars">
-      {sorted.map((row, index) => <li key={row.key} className="fd-hbar">
+      {sorted.map((row) => <li key={row.key} className="fd-hbar">
         <span className="n" title={row.name}>{row.name}</span>
         <div className="track" aria-hidden="true"><i style={{
           width: largest ? (Math.abs(row.amount) / largest * 100) + '%' : '0%',
-          '--bar-color': colorFor?.(row.key) || driverColors[index % driverColors.length],
+          '--bar-color': colorFor(row.key),
         }} /></div>
         <b>{money.format(row.amount)}</b>
       </li>)}
