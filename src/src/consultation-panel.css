@@ -76,3 +76,28 @@
   .fx-header-actions .fx-consultation-tabs { order: 1; width: 100%; }
   .fx-header-actions .fx-consultation-tabs button { flex: 1 1 0; padding: 0 7px; font-size: 13px; white-space: normal; }
 }
+
+/* Hierarquia dos títulos e leitura dos números na consulta. */
+.fx-page .fx-banner h2,
+.fx-page .fx-h2,
+.fx-page .freight-charts .fd-h2 {
+  color: var(--p-text);
+  font-size: clamp(17px, 1.5vw, 20px);
+  font-weight: 800;
+}
+.fx-page .fx-kpi:not(.total) small,
+.fx-page .fx-th {
+  color: var(--p-text);
+  font-weight: 750;
+}
+.fx-page .fx-kpi.total small {
+  color: #fff;
+  font-weight: 750;
+}
+.fx-page .fx-row .t,
+.fx-page .fx-row .w,
+.fx-page .fx-row .nm small {
+  color: var(--p-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
