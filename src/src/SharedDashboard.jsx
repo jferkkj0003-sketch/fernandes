@@ -142,9 +142,12 @@ export default function SharedDashboard({ token }) {
     for (const row of open.ranked) { const item = get(row.driver); item.count += row.count; item.weight = item.weight === null || row.weight === null ? null : item.weight + row.weight; item.confirmed += row.amount; }
     for (const closure of [...waiting, ...requested]) { const item = get(closure.driver); item.count += closure.filteredCount; if (item.weight !== null) item.weight += closure.filteredWeight; item.confirmed += closure.filteredTotal; }
     for (const preview of previews) get(preview.driver).waiting += Number(preview.amount || 0);
-    const rows = [...map.values()].sort((a, b) => b.confirmed - a.confirmed || a.name.localeCompare(b.name, 'pt-BR'));
+    const rows = [...map.values()]
+      .map((row) => ({ ...row, payable: row.confirmed + row.waiting }))
+      .sort((a, b) => b.payable - a.payable || a.name.localeCompare(b.name, 'pt-BR'));
+    const payable = { count: confirmed.count + sPreview.count, amount: confirmed.amount + sPreview.amount };
     const overall = consultationPeriodSummary(data, period, driverFilter);
-    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, rows, overall };
+    return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, payable, rows, overall };
   }, [data, period, driverFilter, now]);
 
   const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
@@ -155,7 +158,7 @@ export default function SharedDashboard({ token }) {
   const periodLabel = range === 'all' ? 'Todo o período' : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
   const situation = [
     ['Em aberto', view.open.ticketCount, view.open.amount, '#10b981'],
-    ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b', true],
+    ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b'],
     ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, '#3b82f6'],
     ['Solicitado', view.requested.count, view.requested.amount, '#8b5cf6'],
   ];
@@ -202,34 +205,34 @@ export default function SharedDashboard({ token }) {
         <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#f59e0b' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><small>Aguardando Ticket</small><strong>{money(view.preview.amount)}</strong></div>
-        <div className="fx-kpi total" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar (confirmado)</small><strong>{money(view.confirmed.amount)}</strong></div>
+        <div className="fx-kpi total" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar</small><strong>{money(view.payable.amount)}</strong></div>
       </section>
 
       <div className="fx-grid">
         <section className="fx-card" aria-label="Valores por motorista">
           <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
           <div className="fx-table">
-            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Confirmado</span><span>Aguardando</span><span /></div>
+            <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Total a pagar</span><span>Em carregamento</span><span /></div>
             {view.rows.map((row, index) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': AVATARS[index % AVATARS.length] }}>
               <span className="who"><span className="fx-avatar">{initials(row.name)}</span><span className="nm"><b>{row.name}</b><small className="sub">{row.count} {row.count === 1 ? 'ticket' : 'tickets'} · {fmtWeight(row.weight)}</small></span></span>
               <span className="t">{row.count}</span><span className="w">{fmtWeight(row.weight)}</span>
-              <span className="c">{money(row.confirmed)}</span><span className="a">{row.waiting > 0 ? money(row.waiting) : '—'}</span><ChevronRight size={18} className="go" />
+              <span className="c">{money(row.payable)}</span><span className="a">{row.waiting > 0 ? <><small className="fx-mobile-label">Em carregamento: </small>{money(row.waiting)}</> : '—'}</span><ChevronRight size={18} className="go" />
             </div>)}
             {!view.rows.length && <p className="fx-empty">Nenhum valor para os filtros selecionados.</p>}
           </div>
-          {view.rows.length > 0 && <div className="fx-total-bar"><b>{range === 'week' ? 'Total da Semana' : 'Total'}</b><span className="t">{view.confirmed.count}</span><span className="w">{fmtWeight(view.confirmed.weight)}</span><span className="c">{money(view.confirmed.amount)}</span><span className="a">{money(view.preview.amount)}</span></div>}
+          {view.rows.length > 0 && <div className="fx-total-bar"><b>{range === 'week' ? 'Total da Semana' : 'Total'}</b><span className="t">{view.confirmed.count}</span><span className="w">{fmtWeight(view.confirmed.weight)}</span><span className="c">{money(view.payable.amount)}</span><span className="a">{money(view.preview.amount)}</span></div>}
         </section>
 
         <div className="fx-stack">
           <section className="fx-card" aria-label="Situação das cargas">
             <h2 className="fx-h2"><Layers size={18} /> Situação das Cargas</h2>
             <ul className="fx-situation">
-              {situation.map(([label, count, amount, color, outside]) => <li key={label}><i style={{ background: color }} /><span>{label}{outside && <small>fora do total</small>}</span><em>{count}</em><b>{money(amount)}</b></li>)}
+              {situation.map(([label, count, amount, color]) => <li key={label}><i style={{ background: color }} /><span>{label}</span><em>{count}</em><b>{money(amount)}</b></li>)}
             </ul>
-            <div className="fx-total-row slim"><span>Total confirmado</span><span>{view.confirmed.count}</span><b>{money(view.confirmed.amount)}</b></div>
+            <div className="fx-total-row slim"><span>Total a pagar</span><span>{view.payable.count}</span><b>{money(view.payable.amount)}</b></div>
           </section>
 
-          {view.preview.amount > 0 && <aside className="fx-alert warn"><Info size={20} /><div><strong>Atenção</strong><p>Existem cargas em “Aguardando ticket”. O valor pode aumentar com a entrada dos tickets pendentes.</p></div></aside>}
+          {view.preview.count > 0 && <aside className="fx-alert warn"><Info size={20} /><div><strong>Atenção</strong><p>As cargas em “Aguardando ticket” já estão no total a pagar. O ticket ainda não foi emitido porque o motorista está carregando na fábrica.</p></div></aside>}
         </div>
       </div>
 
@@ -259,7 +262,7 @@ export default function SharedDashboard({ token }) {
       <DriverValueChart
         rows={scope === 'history'
           ? view.overall.ranked.map((row) => ({ key: row.driver, name: row.driver, amount: row.amount }))
-          : view.rows.filter((row) => row.count > 0).map((row) => ({ key: row.name, name: row.name, amount: row.confirmed }))}
+          : view.rows.map((row) => ({ key: row.name, name: row.name, amount: row.payable }))}
         periodLabel={periodLabel}
       />
     </div>}
