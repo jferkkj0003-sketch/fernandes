@@ -6,7 +6,7 @@ import { requestArchiveAt, REQUESTS_TRACKING_START_DATE } from './lib/request-cy
 
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const dateISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const localToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Manaus', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const localToday = () => dateISO(new Date());
 const shiftDays = (iso, days) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + days); return dateISO(d); };
 const nextFridayISO = (iso) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + (5 - d.getDay() + 7) % 7); return dateISO(d); };
 const brShort = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -95,13 +95,11 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
   const main = useMemo(() => invalidRange ? aggregate([]) : aggregate(select(period.start, period.end)), [records, range, customStart, customEnd, driverFilter, statusFilter, today]);
   // Resumo da semana: só tickets EM ABERTO de cada motorista, de qualquer data (inclui os da semana passada que ainda não fecharam).
   const week = useMemo(() => aggregate(records.filter((record) => record.status === 'open' && (driverFilter === 'Todos' || record.key === driverFilter))), [records, driverFilter]);
-  const allTime = useMemo(() => aggregate(records.filter((record) => (driverFilter === 'Todos' || record.key === driverFilter) && (statusFilter === 'all' || record.status === statusFilter))), [records, driverFilter, statusFilter]);
   const { rows, totals } = main;
-  const valueRows = allTime.rows;
-  // A mesma identidade mantém a cor nos dois gráficos e no resumo semanal.
-  const colorOf = (key) => COLORS[Math.max(0, drivers.findIndex((driver) => driver.key === key)) % COLORS.length];
+  // cor fixa por motorista (mesma cor nos gráficos e na tabela da semana)
+  const colorOf = (key) => { const i = rows.findIndex((row) => row.key === key); return COLORS[(i < 0 ? week.rows.findIndex((row) => row.key === key) : i) % COLORS.length]; };
 
-  const maxAmount = Math.max(0, ...valueRows.map((row) => Math.abs(row.amount)));
+  const maxAmount = Math.max(0, ...rows.map((row) => row.amount));
   const maxWeight = Math.max(0, ...rows.map((row) => row.weight));
   const weightScale = niceCeil(maxWeight);
   const ticks = [0, 1, 2, 3, 4].map((i) => (weightScale / 4) * i);
@@ -148,12 +146,12 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
 
     <div className="fd-two">
       <section className="fd-card" aria-label="Valor por motorista">
-        <h2 className="fd-h2"><BadgeDollarSign size={20} /> Valor por Motorista <small>(Todo o período)</small></h2>
+        <h2 className="fd-h2"><BadgeDollarSign size={20} /> Valor por Motorista <small>({periodLabel})</small></h2>
         <div className="fd-hbars">
-          {valueRows.map((row, index) => <div key={row.key} className="fd-hbar"><span className="n">{row.name}</span>
-            <div className="track"><i style={{ width: `${maxAmount ? (Math.abs(row.amount) / maxAmount) * 100 : 0}%`, background: colorOf(row.key) }} /></div>
+          {rows.map((row, index) => <div key={row.key} className="fd-hbar"><span className="n">{row.name}</span>
+            <div className="track"><i style={{ width: `${maxAmount ? Math.max(6, (row.amount / maxAmount) * 100) : 0}%`, background: COLORS[index % COLORS.length] }} /></div>
             <b>{money(row.amount)}</b></div>)}
-          {!valueRows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
+          {!rows.length && <p className="empty-state">Nenhum valor para os filtros selecionados.</p>}
         </div>
       </section>
 
@@ -164,7 +162,7 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
           <div className="plot">
             <div className="grid">{ticks.map((tick) => <i key={tick} />)}</div>
             <div className="cols">{rows.map((row, index) => <div key={row.key} className="col">
-              <div className="barwrap" style={{ '--h': `${weightScale ? (row.weight / weightScale) * 100 : 0}%` }}><span className="val">{formatWeight(row.weight)}</span><i style={{ height: `${weightScale ? (row.weight / weightScale) * 100 : 0}%`, background: colorOf(row.key) }} /></div>
+              <div className="barwrap" style={{ '--h': `${weightScale ? (row.weight / weightScale) * 100 : 0}%` }}><span className="val">{formatWeight(row.weight)}</span><i style={{ height: `${weightScale ? (row.weight / weightScale) * 100 : 0}%`, background: COLORS[index % COLORS.length] }} /></div>
               <span className="lbl">{firstName(row.name)}</span></div>)}</div>
           </div>
         </div> : <p className="empty-state">Nenhum peso para os filtros selecionados.</p>}
@@ -186,13 +184,13 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       </section>
 
       <section className="fd-card" aria-label="Resumo total">
-        <h2 className="fd-h2"><ClipboardList size={20} /> Resumo Total <small>(Todo o período)</small></h2>
+        <h2 className="fd-h2"><ClipboardList size={20} /> Resumo Total <small>({periodLabel})</small></h2>
         <ul className="fd-total-list">
-          <li style={{ '--c': '#3b82f6' }}><span className="ico"><Ticket size={20} /></span><span>Total de Tickets</span><b>{allTime.totals.tickets.toLocaleString('pt-BR')}</b></li>
-          <li style={{ '--c': '#8b5cf6' }}><span className="ico"><Weight size={20} /></span><span>Peso Total</span><b>{formatWeight(allTime.totals.weight)}</b></li>
-          <li style={{ '--c': '#10b981' }}><span className="ico"><BadgeDollarSign size={20} /></span><span>Valor Total</span><b>{money(allTime.totals.amount)}</b></li>
-          <li style={{ '--c': '#f59e0b' }}><span className="ico"><Truck size={20} /></span><span>Em Aberto</span><b>{money(allTime.totals.open)}</b></li>
-          <li style={{ '--c': '#f97316' }}><span className="ico"><Hourglass size={20} /></span><span>Aguardando Ticket</span><b>{money(allTime.totals.preview)}</b></li>
+          <li style={{ '--c': '#3b82f6' }}><span className="ico"><Ticket size={20} /></span><span>Total de Tickets</span><b>{totals.tickets.toLocaleString('pt-BR')}</b></li>
+          <li style={{ '--c': '#8b5cf6' }}><span className="ico"><Weight size={20} /></span><span>Peso Total</span><b>{formatWeight(totals.weight)}</b></li>
+          <li style={{ '--c': '#10b981' }}><span className="ico"><BadgeDollarSign size={20} /></span><span>Valor Total</span><b>{money(totals.amount)}</b></li>
+          <li style={{ '--c': '#f59e0b' }}><span className="ico"><Truck size={20} /></span><span>Em Aberto</span><b>{money(totals.open)}</b></li>
+          <li style={{ '--c': '#f97316' }}><span className="ico"><Hourglass size={20} /></span><span>Aguardando Ticket</span><b>{money(totals.preview)}</b></li>
         </ul>
       </section>
     </div>

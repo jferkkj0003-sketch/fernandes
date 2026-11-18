@@ -1,6 +1,7 @@
 import './driver-lifecycle.test.mjs';
 import './freight-forecast.test.mjs';
 import './freight-preview-database.test.mjs';
+import './ticket-preview.test.mjs';
 import './responsive-table.test.mjs';
 
 import './closure-window.test.mjs';

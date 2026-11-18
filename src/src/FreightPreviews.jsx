@@ -1,23 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { supabase } from './lib/cloud';
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Manaus' });
 const nextFriday = () => { const d = new Date(`${today()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + (5 - d.getUTCDay() + 7) % 7); return d.toISOString().slice(0, 10); };
 const money = (n) => Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export default function FreightPreviews({ drivers, onSelect, refreshKey, isAdmin }) {
-  const [rows, setRows] = useState([]);
+export default function FreightPreviews({ drivers, rows = [], onChanged, onSelect, isAdmin, selectedId }) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [driver, setDriver] = useState('');
   const [amount, setAmount] = useState('');
   const [expanded, setExpanded] = useState(false);
   const active = drivers.filter(d => d.active !== false && d.id);
-  async function refresh() {
-    const { data, error } = await supabase.from('freight_previews').select('*, driver:drivers(name)').is('cancelled_at', null).is('ticket_id', null).order('payment_date');
-    if (error) setMessage(`Não foi possível carregar as prévias: ${error.message}`); else setRows(data || []);
-  }
-  useEffect(() => { if (supabase) refresh(); }, [refreshKey]);
+  const refresh = async () => { await onChanged?.(); };
   async function save(e) {
     e.preventDefault();
     const form = e.currentTarget, data = new FormData(form);
@@ -44,7 +39,7 @@ export default function FreightPreviews({ drivers, onSelect, refreshKey, isAdmin
       <label className="wide-field">Observação<input name="note" /></label>
       <div className="form-actions"><span>{message}</span><button className="button primary" disabled={busy}>Salvar prévia</button></div>
     </form>
-    <div className="table-wrap"><table><thead><tr><th>CARREGAMENTO</th><th>MOTORISTA</th><th>PAGAMENTO</th><th>VALOR</th><th>AÇÃO</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{row.loading_date.split('-').reverse().join('/')}</td><td>{row.driver?.name}</td><td>{row.payment_date.split('-').reverse().join('/')}</td><td>{money(row.amount)}</td><td><button type="button" className="button secondary small-button" onClick={() => onSelect(row)}>Vincular ticket</button> {isAdmin && <button type="button" className="row-action danger-action" disabled={busy} onClick={() => cancel(row)}>Cancelar</button>}</td></tr>)}{!rows.length && <tr><td colSpan="5">Nenhuma prévia aguardando ticket.</td></tr>}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>CARREGAMENTO</th><th>MOTORISTA</th><th>PAGAMENTO</th><th>VALOR</th><th>AÇÃO</th></tr></thead><tbody>{rows.map(row => <tr key={row.id} className={selectedId === row.id ? 'is-linked' : ''}><td>{row.loading_date.split('-').reverse().join('/')}</td><td>{row.driver?.name}</td><td>{row.payment_date.split('-').reverse().join('/')}</td><td>{money(row.amount)}</td><td><button type="button" className="button secondary small-button" onClick={() => onSelect(row)}>{selectedId === row.id ? 'Vinculada' : 'Vincular ticket'}</button> {isAdmin && <button type="button" className="row-action danger-action" disabled={busy} onClick={() => cancel(row)}>Cancelar</button>}</td></tr>)}{!rows.length && <tr><td colSpan="5">Nenhuma prévia aguardando ticket.</td></tr>}</tbody></table></div>
     </div>
   </section>;
 }

@@ -12,6 +12,8 @@ import {
 } from './lib/cloud';
 import ResponsiveTable from './ResponsiveTable';
 import FreightPreviews from './FreightPreviews';
+import TicketPreviewPanel from './TicketPreviewPanel';
+import { linkStillValid } from './lib/ticket-preview';
 import PdfScanPreview from './PdfScanPreview';
 import { isWithinClosureChangeWindow } from './lib/closures';
 import { driverKey, recordDriverKey, matchesDriver, driverOptions } from './lib/drivers';
@@ -1099,23 +1101,53 @@ function Metric({ icon: Icon, label, value, tint, foot }) {
 function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave, onView, onEdit, onDelete, canDeleteTicket, saving, isAdmin }) {
   const [scanName, setScanName] = useState('');
   const [selectedPreview, setSelectedPreview] = useState(null);
-  const [previewRefresh, setPreviewRefresh] = useState(0);
+  const [pendingPreviews, setPendingPreviews] = useState([]);
+  const [draft, setDraft] = useState({ driverId: '', date: localToday(), number: '', weight: '', gross: '1000', discount: '0' });
   const ticketForm = useRef(null);
   const [ticketDriver, setTicketDriver] = useState('');
   const [formOpen, setFormOpen] = useState(() => window.matchMedia('(min-width: 801px)').matches);
   const options = driverOptions(drivers, tickets);
   const activeDrivers = drivers.filter((driver) => driver.active !== false);
   const listedTickets = tickets.filter((ticket) => !ticketDriver || recordDriverKey(ticket) === ticketDriver);
+  const readDraft = (form) => {
+    const driver = activeDrivers.find((item) => driverKey(item) === form.elements.driver.value);
+    return { driverId: driver?.id || '', date: form.elements.date.value, number: form.elements.number.value.trim(), weight: form.elements.weight.value, gross: form.elements.gross.value, discount: form.elements.discount.value };
+  };
+  const loadPendingPreviews = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('freight_previews').select('*, driver:drivers(name)').is('cancelled_at', null).is('ticket_id', null).order('payment_date');
+    if (!error) setPendingPreviews(data || []);
+  };
+  useEffect(() => { loadPendingPreviews(); }, []);
+  const applyPreview = (preview) => {
+    const d = drivers.find((item) => item.id === preview.driver_id && item.active !== false);
+    if (!d) { window.alert('O motorista desta prévia está inativo. Peça ao administrador para reativá-lo antes de vincular o ticket.'); return; }
+    const form = ticketForm.current;
+    setSelectedPreview(preview);
+    form.elements.date.value = preview.loading_date;
+    form.elements.driver.value = driverKey(d);
+    form.elements.plate.value = d.plate || '';
+    form.elements.gross.value = preview.amount;
+    setDraft(readDraft(form));
+    setFormOpen(true);
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const handleFormChange = (event) => {
+    const next = readDraft(event.currentTarget);
+    setDraft(next);
+    // O banco exige o mesmo motorista e a mesma data da prévia: ao mudar, o vínculo é desfeito.
+    if (selectedPreview && !linkStillValid(selectedPreview, next.driverId, next.date)) setSelectedPreview(null);
+  };
   const handleTicketSubmit = async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     if (cloudConfigured && !selectedPreview) {
       const { data, error } = await supabase.from('freight_previews').select('id').eq('driver_id', form.elements.driver.value).eq('loading_date', form.elements.date.value).is('ticket_id', null).is('cancelled_at', null).limit(1);
       if (error) { window.alert('Não foi possível conferir as prévias. Tente novamente antes de registrar o ticket.'); return; }
-      if (data?.length && !window.confirm('Existe uma prévia para este motorista e esta data. Se for a mesma viagem, cancele e clique em Vincular ticket na prévia. Registrar assim uma viagem diferente?')) return;
+      if (data?.length && !window.confirm('Existe uma prévia pendente para este motorista e esta data. Se for a mesma viagem, toque em “Vincular” na faixa de prévia acima. Registrar mesmo assim como uma viagem diferente?')) return;
     }
     const saved = await onSave({ preventDefault() {}, currentTarget: form });
-    if (saved) { setSelectedPreview(null); setPreviewRefresh(value => value + 1); if (!window.matchMedia('(min-width: 801px)').matches) setFormOpen(false); }
+    if (saved) { setSelectedPreview(null); loadPendingPreviews(); setDraft(readDraft(form)); if (!window.matchMedia('(min-width: 801px)').matches) setFormOpen(false); }
     if (!form.elements.scan.files.length && !form.elements.cameraScan.files.length) setScanName('');
   };
   const exportCsv = () => {
@@ -1133,9 +1165,9 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
     <PageHeading eyebrow="LANÇAMENTOS" title="Tickets" subtitle="Registre os fretes e acompanhe o andamento de cada ticket." />
     <section className={`panel form-panel ${formOpen ? '' : 'collapsed'}`}>
       <div className="panel-heading form-heading"><div><h2><span className="heading-icon"><Plus size={17} /></span> Registrar ticket</h2><p>Os campos com * são obrigatórios.</p></div><span className="form-step">NOVO LANÇAMENTO</span><button type="button" className="button secondary small-button form-toggle" aria-expanded={formOpen} onClick={() => setFormOpen((open) => !open)}>{formOpen ? 'Recolher' : 'Abrir'}</button></div>
-      <form className="ticket-form" ref={ticketForm} onSubmit={handleTicketSubmit}>
+      <form className="ticket-form" ref={ticketForm} onSubmit={handleTicketSubmit} onChange={handleFormChange}>
         <input type="hidden" name="previewId" value={selectedPreview?.id || ''} />
-        {selectedPreview && <div className="wide-field notice">Vinculando à prévia de {selectedPreview.driver?.name}, carregamento em {selectedPreview.loading_date.split('-').reverse().join('/')}. <button type="button" onClick={() => setSelectedPreview(null)}>Desvincular</button></div>}
+        <TicketPreviewPanel previews={pendingPreviews} draft={draft} selected={selectedPreview} cloud={cloudConfigured} onLink={applyPreview} onUnlink={() => setSelectedPreview(null)} />
         <label>Data *<input type="date" name="date" defaultValue={localToday()} required /></label>
         <label>Nº do ticket *<input name="number" placeholder="Ex.: 1465" required /></label>
         <label>Motorista *<select name="driver" defaultValue="" required onChange={(event) => { const selected = activeDrivers.find((driver) => driverKey(driver) === event.target.value); event.currentTarget.form.elements.plate.value = selected?.plate || ''; event.currentTarget.form.elements.gross.value = Number(selected?.defaultFare ?? 1000).toFixed(2); }}><option value="" disabled>Selecione…</option>{activeDrivers.map((driver) => <option key={driverKey(driver)} value={driverKey(driver)}>{driver.name}</option>)}</select></label>
@@ -1156,7 +1188,7 @@ function Tickets({ tickets, drivers, query, setQuery, filter, setFilter, onSave,
         <div className="form-actions"><span><span className="status-dot amber" /> {saving ? 'Salvando na nuvem…' : cloudConfigured ? 'O lançamento será confirmado após salvar na nuvem.' : 'Demonstração local: este lançamento não vai para a nuvem.'}</span><button className="button primary" type="submit" disabled={saving}>{saving ? 'Salvando…' : <><Check size={16} /> Registrar ticket</>}</button></div>
       </form>
     </section>
-    <FreightPreviews drivers={drivers} isAdmin={isAdmin} refreshKey={previewRefresh} onSelect={(preview) => { const d = drivers.find(item => item.id === preview.driver_id && item.active !== false); if (!d) { window.alert('O motorista desta prévia está inativo. Peça ao administrador para reativá-lo antes de vincular o ticket.'); return; } setSelectedPreview(preview); const form = ticketForm.current; form.elements.date.value = preview.loading_date; form.elements.driver.value = driverKey(d); form.elements.plate.value = d.plate || ''; form.elements.gross.value = preview.amount; form.scrollIntoView({ behavior: 'smooth' }); }} />
+    <FreightPreviews drivers={drivers} isAdmin={isAdmin} rows={pendingPreviews} selectedId={selectedPreview?.id} onChanged={loadPendingPreviews} onSelect={applyPreview} />
     <section className="panel list-panel">
       <div className="panel-heading"><div><h2>Tickets registrados</h2><p>Pesquise e filtre os lançamentos.</p></div><button className="button secondary small-button" onClick={exportCsv}><ArrowDownToLine size={16} /> Exportar</button></div>
       <div className="table-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ticket, motorista ou placa" /></label><select className="filter-select ticket-driver-filter" aria-label="Filtrar por motorista" value={ticketDriver} onChange={(event) => setTicketDriver(event.target.value)}><option value="">Todos os motoristas</option>{options.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select><select className="filter-select" aria-label="Filtrar por status" value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Aberto</option><option>No fechamento</option></select></div>

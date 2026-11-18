@@ -6,6 +6,7 @@ import InviteSignup from './InviteSignup.jsx';
 import './theme.css';
 import './modelo.css';
 import './solid-dashboard.css';
+import './glass.css';
 
 const sharedToken = new URLSearchParams(window.location.search).get('painel');
 const inviteToken = new URLSearchParams(window.location.search).get('convite');
