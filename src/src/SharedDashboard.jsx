@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
-import { cloudConfigured, loadSharedDashboard } from './lib/cloud';
+import { cloudConfigured, loadSharedClosingTicketDetail, loadSharedClosingTickets, loadSharedDashboard } from './lib/cloud';
 import FreightCharts from './ConsultationValueChart';
 import SharedTicketDetail from './SharedTicketDetail';
+import { createSharedTicketCache } from './lib/shared-ticket-cache';
 import { makeDriverColorMap } from './lib/driver-colors';
 import { consultationPeriodSummary } from './lib/consultation-period';
 import './consultation-panel.css';
@@ -156,6 +157,22 @@ export default function SharedDashboard({ token }) {
     return { open, waiting: sWaiting, requested: sRequested, preview: sPreview, confirmed, payable, rows, overall };
   }, [data, period, driverFilter, now]);
 
+  const ticketCache = useMemo(() => createSharedTicketCache({
+    token, start: period.start, end: period.end,
+    loadList: loadSharedClosingTickets, loadDetails: loadSharedClosingTicketDetail,
+  }), [token, period.start, period.end, scope, lastModified, stale, loadError]);
+  useEffect(() => () => ticketCache.clear(), [ticketCache]);
+
+  const openDriverKeys = JSON.stringify(view.open.ranked.map((row) => row.driver));
+  useEffect(() => {
+    if (scope !== 'open' || invalidRange || stale || loadError || openDriverKeys === '[]') return undefined;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      ticketCache.warm(JSON.parse(openDriverKeys), controller.signal).catch(() => {});
+    }, 250);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [ticketCache, scope, invalidRange, stale, loadError, openDriverKeys]);
+
   const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
   if (loading) return <main className="shared-stage"><section className="shared-card"><img src={logo} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={() => refresh()}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
@@ -284,7 +301,7 @@ export default function SharedDashboard({ token }) {
     </div>}
     {scope === 'open' && ticketDriver && !invalidRange && <SharedTicketDetail
       key={ticketDriver + '|' + period.start + '|' + period.end}
-      token={token} driver={ticketDriver} period={period} onClose={() => setTicketDriver('')}
+      cache={ticketCache} driver={ticketDriver} onClose={() => setTicketDriver('')}
     />}
     <footer className="fx-footer">Atualiza sozinho a cada 30 segundos · Acesso somente para consulta</footer>
   </main>;

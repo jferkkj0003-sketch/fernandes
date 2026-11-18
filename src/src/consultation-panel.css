@@ -155,3 +155,30 @@
   cursor: pointer;
 }
 .fx-ticket-pages button:disabled { opacity: .5; cursor: default; }
+
+.fx-page .fx-ticket-picker {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--p-accent) 48%, var(--p-bd));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--p-accent) 12%, var(--p-card));
+}
+.fx-ticket-picker .fx-field > span {
+  color: var(--p-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+.fx-ticket-picker .fx-field select {
+  border: 1px solid var(--p-accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+.fx-ticket-picker .fx-ticket-pages { min-height: 44px; }
+.fx-ticket-picker .fx-ticket-pages button {
+  min-height: 40px;
+  padding-inline: 12px;
+  font-weight: 700;
+}
+@media (max-width: 520px) {
+  .fx-ticket-picker .fx-field { max-width: none; flex-basis: 100%; }
+  .fx-ticket-picker .fx-ticket-pages { flex: 1 0 100%; justify-content: space-between; }
+}
