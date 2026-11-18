@@ -363,3 +363,53 @@ tr.is-linked td { background: var(--blue-soft); }
   .fd-glass-chart .fd-hbar .track { grid-column: 1 / -1; grid-row: 2; }
   .fd-glass-chart .fd-hbar b { grid-column: 2; grid-row: 1; margin: 0; }
 }
+
+/* Campos de cadastro e prévia de tickets. */
+.ticket-form {
+  --ticket-entry-field: #21252e;
+  --ticket-entry-border: #65758b;
+  --ticket-entry-label: #e6ebf3;
+  --ticket-entry-placeholder: #a8b4c6;
+  --ticket-entry-focus: #70adff;
+}
+:root[data-theme="light"] .ticket-form {
+  --ticket-entry-field: #fff;
+  --ticket-entry-border: #8492a6;
+  --ticket-entry-label: #26364b;
+  --ticket-entry-placeholder: #59677a;
+  --ticket-entry-focus: #1263c4;
+}
+.ticket-form > label {
+  color: var(--ticket-entry-label);
+  font-weight: 700;
+}
+.ticket-form input:not([type="file"]),
+.ticket-form select,
+.ticket-form textarea {
+  background: var(--ticket-entry-field);
+  border: 1px solid var(--ticket-entry-border);
+  color: var(--ticket-entry-label);
+}
+.ticket-form input::placeholder,
+.ticket-form textarea::placeholder {
+  color: var(--ticket-entry-placeholder);
+  opacity: 1;
+}
+.ticket-form input:not([type="file"]):focus,
+.ticket-form select:focus,
+.ticket-form textarea:focus {
+  border-color: var(--ticket-entry-focus);
+  outline: 2px solid var(--ticket-entry-focus);
+  outline-offset: 2px;
+}
+.ticket-form .ticket-scan-field { border-color: var(--ticket-entry-border); }
+.ticket-form .ticket-scan-field .scan-file-button,
+.ticket-form .ticket-scan-field .scan-camera-button {
+  border: 1px solid var(--ticket-entry-border);
+  font-weight: 700;
+}
+.ticket-form .ticket-scan-field .scan-file-button:focus-within,
+.ticket-form .ticket-scan-field .scan-camera-button:focus-within {
+  outline: 2px solid var(--ticket-entry-focus);
+  outline-offset: 2px;
+}

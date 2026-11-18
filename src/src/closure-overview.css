@@ -1,7 +1,11 @@
-.closing-overview { margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-.closing-overview h3 { margin: 0 0 10px; font-size: 17px; font-weight: 750; }
 .closing-overview .open-ticket-totals { margin-block: 0 10px; }
 .closing-overview .metric-card { min-width: 0; }
 .closing-overview .metric-value { white-space: normal; overflow-wrap: anywhere; }
 .closing-overview td strong { font-variant-numeric: tabular-nums; }
-.closing-overview .closing-overview-note { margin: 9px 0 0; color: var(--muted); font-size: 13px; }
+.closing-overview-preview { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+.closing-overview-table th:last-child,
+.closing-overview-table .closing-overview-action { text-align: right; }
+.closing-overview-action .button { white-space: nowrap; }
+@media (max-width: 680px) {
+  .closing-overview-table .closing-overview-action .button { width: 100%; justify-content: center; }
+}

@@ -1046,7 +1046,7 @@ export default function App() {
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
               {page === 'tickets' && <Tickets tickets={visibleTickets} drivers={drivers} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onSave={saveTicket} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} onDelete={isAdmin ? removeTicket : null} canDeleteTicket={canDeleteTicket} saving={savingTicket} isAdmin={isAdmin} />}
-              {page === 'fechamentos' && <Closures user={sessionUser} onView={setViewingTicket} tickets={tickets} drivers={drivers} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
+              {page === 'fechamentos' && <Closures user={sessionUser} tickets={tickets} closures={closures} canDelete={isAdmin} onGenerate={generateClosures} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onDelete={deleteClosure} />}
               {page === 'solicitacoes' && <History drivers={drivers} tickets={tickets} closures={closures} canDelete={isAdmin} onEmail={setClosureToEmail} onMarkRequested={markClosureRequested} onPreview={(item) => openClosurePdf(item, setNotice, setCloudBusy)} onDownload={(item) => downloadClosurePdf(item, setNotice, setCloudBusy)} onDelete={deleteClosure} onEdit={isAdmin ? (item) => { if (isWithinClosureChangeWindow(item)) setClosureToEdit(item); } : null} />}
               {page === 'motoristas' && isAdmin && <Drivers drivers={drivers} onSave={saveDriver} onChangeActive={changeDriverActive} />}
               <footer className="content-footer"><span>Gestão de Frete</span><span>{syncState === 'online' ? 'Dados sincronizados com a nuvem' : syncState === 'error' ? 'Falha na sincronização da nuvem' : 'Modo demonstração local'}</span></footer>
@@ -1510,7 +1510,9 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
   </div>;
 }
 
-function ClosingOverview({ tickets }) {
+function ClosingOverview({ tickets, onGenerate }) {
+  const [generatingDriver, setGeneratingDriver] = useState(null);
+  const generationInProgress = useRef(false);
   const [previewState, setPreviewState] = useState({ status: supabase ? 'loading' : 'ready', rows: [] });
 
   useEffect(() => {
@@ -1531,7 +1533,7 @@ function ClosingOverview({ tickets }) {
 
   const byDriver = new Map();
   function getDriver(key, name) {
-    if (!byDriver.has(key)) byDriver.set(key, { key, name: name || 'Motorista não identificado', count: 0, weight: 0, confirmed: 0, preview: 0 });
+    if (!byDriver.has(key)) byDriver.set(key, { key, name: name || 'Motorista não identificado', tickets: [], weight: 0, confirmed: 0, preview: 0 });
     return byDriver.get(key);
   }
   let weight = 0;
@@ -1541,7 +1543,7 @@ function ClosingOverview({ tickets }) {
     const row = getDriver(recordDriverKey(ticket), ticket.driver);
     const ticketWeight = Number(ticket.weight) || 0;
     const amount = (Number(ticket.gross) || 0) - (Number(ticket.discount) || 0);
-    row.count += 1;
+    row.tickets.push(ticket);
     row.weight += ticketWeight;
     row.confirmed += amount;
     weight += ticketWeight;
@@ -1553,65 +1555,60 @@ function ClosingOverview({ tickets }) {
     row.preview += amount;
     preview += amount;
   }
-  const hasPreviews = previewState.rows.length > 0;
   const rows = [...byDriver.values()].sort((a, b) => (b.confirmed + b.preview) - (a.confirmed + a.preview)
     || a.name.localeCompare(b.name, 'pt-BR'));
 
+  async function generateForDriver(row) {
+    if (generationInProgress.current || !row.tickets.length) return;
+    generationInProgress.current = true;
+    setGeneratingDriver(row.key);
+    try {
+      await onGenerate(row.tickets);
+    } finally {
+      generationInProgress.current = false;
+      setGeneratingDriver(null);
+    }
+  }
+
   return <section className="closing-overview" aria-label="Resumo em aberto">
-    <h3>Resumo em aberto</h3>
     <div className="open-ticket-totals">
+      <Metric icon={ClipboardList} label="Quantidade de tickets" value={tickets.length.toLocaleString('pt-BR')} tint="amber" foot="Tickets em aberto" />
       <Metric icon={Truck} label="Peso total" value={formatDashboardWeight(weight)} tint="violet" foot="Peso dos tickets em aberto" />
-      <Metric icon={BadgeDollarSign} label="Valor dos tickets" value={money(confirmed)} tint="green" foot="Valor líquido após descontos" />
-      <Metric icon={ClipboardList} label="Valor total previsto" value={previewState.status === 'ready' ? money(confirmed + preview) : '—'} tint="amber"
-        foot={previewState.status === 'error' ? 'Prévias indisponíveis' : previewState.status === 'loading' ? 'Consultando prévias' : 'Tickets em aberto + prévias pendentes'} />
+      <Metric icon={BadgeDollarSign} label={preview > 0 ? 'Valor total previsto' : 'Valor total'} value={money(confirmed + preview)} tint="green"
+        foot={previewState.status === 'error' ? 'Prévias indisponíveis' : previewState.status === 'loading' ? 'Consultando prévias' : preview > 0 ? 'Tickets em aberto + prévias pendentes' : 'Valor líquido dos tickets'} />
     </div>
-    {rows.length > 0 && <div className="table-wrap">
-      <ResponsiveTable aria-label="Valores em aberto por motorista">
-        <thead><tr><th scope="col">Motorista</th><th scope="col">Tickets</th><th scope="col">Peso</th>
-          {hasPreviews && <th scope="col">Em carregamento</th>}<th scope="col">{hasPreviews ? 'Valor total previsto' : 'Valor dos tickets'}</th></tr></thead>
+    {rows.length > 0 ? <div className="table-wrap closing-overview-table">
+      <ResponsiveTable aria-label="Fechamentos por motorista">
+        <thead><tr><th scope="col">Motorista</th><th scope="col">Quant. de tickets</th><th scope="col">Peso total</th><th scope="col">Valor total</th><th scope="col">Ações</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.key}>
-          <td><strong>{row.name}</strong></td><td><strong>{row.count.toLocaleString('pt-BR')}</strong></td><td><strong>{formatDashboardWeight(row.weight)}</strong></td>
-          {hasPreviews && <td>{row.preview ? money(row.preview) : '—'}</td>}<td><strong>{money(row.confirmed + row.preview)}</strong></td>
+          <td><strong>{row.name}</strong></td>
+          <td><strong>{row.tickets.length.toLocaleString('pt-BR')}</strong></td>
+          <td><strong>{formatDashboardWeight(row.weight)}</strong></td>
+          <td><strong>{money(row.confirmed + row.preview)}</strong>
+            {row.preview !== 0 && <small className="closing-overview-preview">Inclui {money(row.preview)} em prévias</small>}
+          </td>
+          <td className="closing-overview-action">
+            {row.tickets.length > 0 ? <button type="button" className="button primary small-button"
+              aria-label={'Gerar fechamento de ' + row.name} disabled={generatingDriver !== null} onClick={() => generateForDriver(row)}>
+              <Check size={16} aria-hidden="true" /> {generatingDriver === row.key ? 'Gerando…' : 'Gerar fechamento'}
+            </button> : <span>Aguardando ticket</span>}
+          </td>
         </tr>)}</tbody>
       </ResponsiveTable>
-    </div>}
-    {hasPreviews && <p className="closing-overview-note">Prévias compõem a previsão. O fechamento é gerado com os tickets selecionados abaixo.</p>}
+    </div> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket pendente para fechar.</span></div>}
   </section>;
 }
 
-function Closures({ user, onView, tickets, drivers: driverRecords, closures, canDelete, onGenerate, onPreview, onDownload, onEmail, onMarkRequested, onDelete }) {
-  const [generating, setGenerating] = useState(false);
-  const [driver, setDriver] = useState('');
-  const [selectedTicketIds, setSelectedTicketIds] = useState(() => new Set());
+function Closures({ user, tickets, closures, canDelete, onGenerate, onPreview, onDownload, onEmail, onMarkRequested, onDelete }) {
   const pendingTickets = useMemo(() => tickets.filter((ticket) => ticket.status === 'Aberto'), [tickets]);
-  const pendingKeys = new Set(pendingTickets.map(recordDriverKey));
-  const drivers = driverOptions(driverRecords, pendingTickets).filter((option) => pendingKeys.has(option.key));
-  const matches = driver ? pendingTickets.filter((ticket) => recordDriverKey(ticket) === driver,
-  ).sort((a, b) => a.dateISO.localeCompare(b.dateISO) || a.number.localeCompare(b.number)) : [];
-  const matchKey = matches.map((ticket) => ticket.id).join('|');
-  useEffect(() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id))), [matchKey]);
-  const selectedMatches = matches.filter((ticket) => selectedTicketIds.has(ticket.id));
   const pendingClosures = closures.filter((closure) => closure.status === 'Aguardando envio')
     .sort((a, b) => Number(b.number) - Number(a.number));
-  const handleGenerate = async () => {
-    if (generating || !selectedMatches.length) return;
-    setGenerating(true);
-    try { await onGenerate(selectedMatches); }
-    finally { setGenerating(false); }
-  };
 
-  return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Feche os tickets pendentes por motorista." action={<button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Plus size={17} /> {generating ? 'Gerando…' : `Gerar fechamento${selectedMatches.length ? ` (${selectedMatches.length})` : ''}`}</button>} />
+  return <><PageHeading eyebrow="CONSOLIDAÇÃO" title="Fechamentos" subtitle="Feche os tickets pendentes por motorista." />
     <ClosureEmailPreferences user={user} />
-    <section className="panel closure-filters"><div className="panel-heading"><div><h2>Novo fechamento</h2><p>Selecione um motorista para ver todos os tickets em aberto.</p></div></div>
-      <ClosingOverview tickets={pendingTickets} />
-      <div className="filter-fields"><label>Motorista<select value={driver} onChange={(event) => setDriver(event.target.value)}><option value="">Selecione um motorista</option>{drivers.map((option) => <option key={option.key} value={option.key}>{option.name}{option.active === false ? " (inativo)" : ""}</option>)}</select></label></div>
-      {!driver ? <div className="empty-callout"><ClipboardList size={19} /><span>{drivers.length ? 'Selecione um motorista para ver os tickets pendentes.' : 'Nenhum ticket pendente para fechar.'}</span></div> : matches.length ? <>
-        <OpenTicketTotals tickets={selectedMatches} selected />
-        <div className="results-summary"><span><Check size={15} /> {selectedMatches.length} selecionado(s) de {matches.length} ticket(s) aberto(s)</span><span>Todos os abertos deste motorista: <strong>{money(matches.reduce((sum, ticket) => sum + Number(ticket.gross || 0) - Number(ticket.discount || 0), 0))}</strong> · {matches.reduce((sum, ticket) => sum + Number(ticket.weight || 0), 0).toLocaleString('pt-BR')} kg</span></div>
-        <div className="selection-toolbar"><button className="text-button" onClick={() => setSelectedTicketIds(new Set(matches.map((ticket) => ticket.id)))}>Selecionar todos</button><button className="text-button" onClick={() => setSelectedTicketIds(new Set())}>Limpar seleção</button></div>
-        <div className="table-wrap closure-results"><ResponsiveTable><thead><tr><th>INCLUIR</th><th>DATA</th><th>TICKET</th><th>MOTORISTA</th><th>PESO</th><th>OBSERVAÇÃO</th><th>LÍQUIDO</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>{matches.map((ticket) => <tr key={ticket.id}><td><label className="closure-ticket-select"><input type="checkbox" aria-label={`Incluir ticket ${ticket.number}`} checked={selectedTicketIds.has(ticket.id)} onChange={(event) => setSelectedTicketIds((current) => { const next = new Set(current); if (event.target.checked) next.add(ticket.id); else next.delete(ticket.id); return next; })} /></label></td><td>{ticket.date}</td><td><strong>{ticket.number}</strong></td><td>{ticket.driver}</td><td>{ticket.weight.toLocaleString('pt-BR')} kg</td><td>{ticket.note || '—'}</td><td><strong>{money(ticket.gross - ticket.discount)}</strong></td><td><span className="status-badge aberto"><i />Aberto</span></td><td><button type="button" className="row-action" aria-label={`Ver ticket ${ticket.number}`} onClick={() => onView(ticket)}><Eye size={14} /> Ver</button></td></tr>)}</tbody></ResponsiveTable></div>
-        <div className="closure-action"><span>O fechamento será somente de {drivers.find((option) => option.key === driver)?.name} e dos {selectedMatches.length} ticket(s) selecionado(s).</span><button className="button primary" disabled={!selectedMatches.length || generating} onClick={handleGenerate}><Check size={16} /> {generating ? 'Gerando…' : `Gerar fechamento (${selectedMatches.length})`}</button></div>
-      </> : <div className="empty-callout"><ClipboardList size={19} /><span>Nenhum ticket pendente para este motorista.</span></div>}
+    <section className="panel closure-filters">
+      <div className="panel-heading"><div><h2>Novo fechamento</h2><p>Gere o fechamento na linha do motorista. Entram todos os tickets em aberto dele.</p></div></div>
+      <ClosingOverview tickets={pendingTickets} onGenerate={onGenerate} />
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
       {pendingClosures.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onEmail(item)}><Mail size={14} /> Enviar no e-mail</button><button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar como solicitado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
