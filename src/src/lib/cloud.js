@@ -114,7 +114,7 @@ export async function saveClosureEmailRecipients(recipients) {
 }
 
 export function onAuthChange(callback) {
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  return supabase.auth.onAuthStateChange((event, session) => callback(session, event));
 }
 
 async function fetchAllRows(queryFactory, pageSize = 1000) {
@@ -483,7 +483,7 @@ export function subscribeCloudChanges(onChange) {
     .subscribe();
 }
 
-export async function signOut() {
-  return supabase.auth.signOut();
+export async function signOut(options) {
+  return supabase.auth.signOut(options);
 }
 

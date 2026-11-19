@@ -285,6 +285,8 @@ export default function App() {
   const [cloudBusy, setCloudBusy] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
+  const [exitingAccount, setExitingAccount] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
   const [syncState, setSyncState] = useState(cloudConfigured ? 'connecting' : 'demo');
   const [cloudDataReady, setCloudDataReady] = useState(!cloudConfigured);
   const [scanPrefetchProgress, setScanPrefetchProgress] = useState(null);
@@ -344,9 +346,17 @@ export default function App() {
     }).catch(() => {
       if (active) { setAuthReady(true); setAuthMessage('Não foi possível conectar à conta na nuvem.'); }
     });
-    const { data: { subscription } } = onAuthChange((session) => {
+    const { data: { subscription } } = onAuthChange((session, event) => {
       if (!active) return;
       const user = session?.user || null;
+      if (!user) {
+        setAccountOpen(false);
+        setCloudDataReady(false);
+        setCloudLoadError('');
+        setCloudBusy(false);
+        setScanPrefetchProgress(null);
+        if (event === 'SIGNED_OUT') void clearCloudTicketScanCache();
+      }
       setSessionUser(user);
       setShowLogin(!user);
       setAuthReady(true);
@@ -801,15 +811,25 @@ export default function App() {
     } finally { setAccountBusy(false); }
   }
 
+  const signOutLabel = exitingAccount ? 'Saindo…' : 'Sair da conta';
+
   async function exitAccount() {
-    setMobileNav(false);
-    if (cloudConfigured && sessionUser) {
-      const { error } = await signOut();
-      if (error) setNotice('Não foi possível sair da conta.');
-      else await clearCloudTicketScanCache();
+    if (exitingAccount) return;
+    if (!cloudConfigured || !sessionUser) {
+      setAccountOpen(false);
+      setShowLogin(true);
       return;
     }
-    setShowLogin(true);
+    setExitingAccount(true);
+    setSignOutError('');
+    try {
+      const { error } = await signOut({ scope: 'local' });
+      if (error) throw error;
+    } catch {
+      setSignOutError('Não foi possível sair da conta. Tente novamente.');
+    } finally {
+      setExitingAccount(false);
+    }
   }
 
   async function generateClosures(selectedTickets, periodStart, periodEnd) {
@@ -961,7 +981,15 @@ export default function App() {
   return (
     <div className="app-frame">
       {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
-      {cloudConfigured && authReady && sessionUser && !cloudDataReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem…'}</p>{cloudLoadError && <button className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}</section></main> : null}
+      {cloudConfigured && authReady && sessionUser && !cloudDataReady ? (
+        <main className="login-stage"><section className="login-card">
+          <img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
+          <p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem.'}</p>
+          {cloudLoadError && <button type="button" className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}
+          {signOutError && <p className="auth-error" role="alert">{signOutError}</p>}
+          <button className="text-button" type="button" onClick={exitAccount} disabled={exitingAccount}>{signOutLabel}</button>
+        </section></main>
+      ) : null}
       {authReady && showLogin ? (
         <main className="login-stage">
           <section className="login-card">
@@ -974,7 +1002,7 @@ export default function App() {
               const form = new FormData(event.currentTarget);
               const username = String(form.get('username') || '').trim();
               const password = String(form.get('password') || '');
-              setCloudBusy(true); setAuthMessage('');
+              setCloudBusy(true); setAuthMessage(''); setSignOutError('');
               let loginEmail = username;
               if (!username.includes('@')) {
                 try { loginEmail = await emailForUsername(username); }
@@ -1022,7 +1050,7 @@ export default function App() {
               ))}
             </nav>
             <div className="sidebar-spacer" />
-            <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Usuário').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Usuário'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" aria-label="Sair da conta" title="Sair da conta" onClick={exitAccount}><LogOut size={16} /></button></div>
+            <div className="profile-row"><button className="profile-open" onClick={() => { setAccountMessage(''); setAccountOpen(true); }} aria-label="Editar minha conta"><div className="avatar">{(sessionUser?.user_metadata?.display_name || 'Usuário').slice(0, 1).toUpperCase()}</div><div className="profile-text"><strong>{sessionUser?.user_metadata?.display_name || 'Usuário'}</strong><span>{sessionUser?.user_metadata?.username || 'Cadastrar usuário'}</span></div><UserRound size={15} /></button><button className="icon-button" type="button" aria-label={signOutLabel} title={signOutLabel} disabled={exitingAccount} onClick={exitAccount}><LogOut size={16} aria-hidden="true" /></button></div>
           </aside>
 
 
@@ -1042,6 +1070,7 @@ export default function App() {
             </header>
 
             <section className="content">
+              {signOutError && !accountOpen && <p className="auth-error" role="alert">{signOutError}</p>}
               {notice && <div className="notice"><span className="status-dot amber" />{notice}<button className="notice-close" onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={16} /></button></div>}
               {cloudConfigured && cloudBusy && <div className="cloud-loading">Sincronizando lançamentos salvos…</div>}
               {page === 'painel' && <Dashboard tickets={tickets} drivers={drivers} closures={closures} isAdmin={isAdmin} goTo={setPage} onView={setViewingTicket} onEdit={isAdmin ? setEditingTicket : null} />}
@@ -1054,7 +1083,8 @@ export default function App() {
             {editingTicket && <TicketEditModal ticket={editingTicket} drivers={drivers} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => setEditingTicket(null)} onSave={saveTicketAdjustment} />}
             {viewingTicket && <TicketDetailModal ticket={viewingTicket} onClose={() => setViewingTicket(null)} canViewHistory={isAdmin} />}
             {closureToEmail && <ClosureOutlookModal key={closureToEmail.id} closure={closureToEmail} user={sessionUser} onClose={() => setClosureToEmail(null)} onPrepare={prepareClosureEmail} onConfirmSent={markClosureRequested} onGetConsultationLink={getClosureConsultationLink} />}
-            {accountOpen && <AccountModal user={sessionUser} onClose={() => setAccountOpen(false)} onSave={saveAccount} busy={accountBusy} message={accountMessage} isAdmin={isAdmin} />}
+            {accountOpen && <AccountModal user={sessionUser} onClose={() => setAccountOpen(false)} onSave={saveAccount} busy={accountBusy} message={accountMessage} isAdmin={isAdmin}
+              onSignOut={exitAccount} exitingAccount={exitingAccount} signOutLabel={signOutLabel} signOutError={signOutError} />}
             {closureToDelete && <AdminDeleteModal closure={closureToDelete} password={deletePassword} setPassword={setDeletePassword} message={deletePasswordMessage} busy={deleteBusy} onClose={() => { if (!deleteBusy) { setClosureToDelete(null); setDeletePassword(''); setDeletePasswordMessage(''); } }} onConfirm={confirmDeleteClosure} />}
             {driverToUpdate && <DriverActiveModal driver={driverToUpdate} ticketCount={tickets.filter((ticket) => matchesDriver(ticket, driverToUpdate)).length} closureCount={closures.filter((closure) => matchesDriver(closure, driverToUpdate)).length} password={driverActivePassword} setPassword={setDriverActivePassword} message={driverActiveMessage} busy={driverActiveBusy} requirePassword={Boolean(cloudConfigured && sessionUser)} onClose={() => { if (!driverActiveBusy) { setDriverToUpdate(null); setDriverActivePassword(''); setDriverActiveMessage(''); } }} onConfirm={confirmDriverActive} />}
             {ticketToDelete && <TicketDeleteModal ticket={ticketToDelete} password={ticketDeletePassword} setPassword={setTicketDeletePassword} message={ticketDeleteMessage} busy={ticketDeleteBusy} onClose={() => { if (!ticketDeleteBusy) { setTicketToDelete(null); setTicketDeletePassword(''); setTicketDeleteMessage(''); } }} onConfirm={confirmDeleteTicket} />}
@@ -1491,7 +1521,7 @@ function OperatorAccessManager({ isAdmin }) {
   </section>;
 }
 
-function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
+function AccountModal({ user, onClose, onSave, busy, message, isAdmin, onSignOut, exitingAccount, signOutLabel, signOutError }) {
   const displayName = user?.user_metadata?.display_name || 'Usuário';
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="edit-modal account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
@@ -1501,7 +1531,12 @@ function AccountModal({ user, onClose, onSave, busy, message, isAdmin }) {
         <label>Usuário<input name="username" defaultValue={user?.user_metadata?.username || ''} placeholder="Ex.: ADM" minLength="3" autoComplete="username" required /></label>
         <label>Nova senha <span>(deixe em branco para manter a atual)</span><input name="password" type="password" minLength="6" autoComplete="new-password" placeholder="Pelo menos 6 caracteres" /></label>
         {message && <p className="account-message" role="status">{message}</p>}
-        <div className="form-actions"><button className="button secondary" type="button" onClick={onClose}>Fechar</button><button className="button primary" type="submit" disabled={busy}><Check size={16} /> {busy ? 'Salvando…' : 'Salvar alterações'}</button></div>
+        {signOutError && <p className="auth-error" role="alert">{signOutError}</p>}
+        <div className="form-actions">
+          <button className="button secondary" type="button" onClick={onSignOut} disabled={busy || exitingAccount}><LogOut size={16} aria-hidden="true" /> {signOutLabel}</button>
+          <button className="button secondary" type="button" onClick={onClose}>Fechar</button>
+          <button className="button primary" type="submit" disabled={busy || exitingAccount}><Check size={16} /> {busy ? 'Salvando…' : 'Salvar alterações'}</button>
+        </div>
       </form>
       <DownloadPreferences />
       <DashboardShareManager isAdmin={isAdmin} />
