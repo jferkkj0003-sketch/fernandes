@@ -210,6 +210,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .ticket-actions, .closure-action-group, .ticket-action-cell { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 td.ticket-action-cell, td.closure-actions { display: table-cell; }
 td.ticket-action-cell .ticket-actions { justify-content: flex-end; }
+.pending-closure-actions .closure-action-group { gap: 8px; }
+.pending-closure-actions .button svg { flex: none; }
 .closure-ticket-select { display: inline-flex; }
 .status-badge { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 10px; font-size: 12px; font-weight: 700; white-space: nowrap; background: var(--blue-soft); color: var(--blue-text); border: 1px solid rgba(70, 130, 255, .38); }
 .status-badge i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -529,6 +531,9 @@ td.ticket-action-cell .ticket-actions { justify-content: flex-end; }
   .responsive-table td.ticket-action-cell::before, .responsive-table td.closure-actions::before { content: none; }
   .responsive-table .ticket-actions, .responsive-table .closure-action-group { display: contents; }
   .responsive-table .row-action, .responsive-table .closure-action-group .button { justify-content: center; min-height: 40px; }
+  .pending-closure-actions .closure-action-group .button { min-width: 0; padding: 8px 10px; white-space: normal; }
+  .pending-closure-actions .closure-action-group .primary,
+  .pending-closure-actions .closure-action-group .button:last-child:nth-child(even) { grid-column: 1 / -1; }
   .responsive-table .ticket-empty-row td { display: block; text-align: center; }
   .toast { bottom: calc(var(--dock-h) + 14px); }
 }

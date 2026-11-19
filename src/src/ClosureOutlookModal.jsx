@@ -3,7 +3,7 @@ import { X, Mail, Check, ArrowDownToLine } from 'lucide-react';
 import { normalizeRecipients } from './lib/email-recipients';
 import { OUTLOOK_INSTALLER } from './lib/outlook-helper';
 import { appErrorMessage, isOutdatedAssetError, readEmailRecovery, saveEmailRecovery, clearEmailRecovery } from './lib/app-update';
-import { closureEmailTemplate, paymentDateLabel, prepareClosureMessage } from './lib/closure-email-template';
+import { closureEmailTemplate, prepareClosureMessage } from './lib/closure-email-template';
 import { hasConfirmedOutlookHelper, rememberOutlookHelper, readOutlookAttempt, writeOutlookAttempt } from './lib/outlook-preferences';
 
 export default function ClosureOutlookModal({ closure, user, onClose, onPrepare, onConfirmSent, onGetConsultationLink }) {
@@ -54,7 +54,6 @@ export default function ClosureOutlookModal({ closure, user, onClose, onPrepare,
       const recipients = normalizeRecipients(to, cc);
       if (!recipients.to.length) throw new Error('Informe pelo menos um destinatário no campo Para.');
       const message = prepareClosureMessage(body, consultationUrl);
-      setBody(message.body);
       setBusy(true);
       storeAttempt({ status: 'preparing', at: Date.now() }); started = true;
       const saved = await onPrepare(closure, { to: recipients.to.join('; '), cc: recipients.cc.join('; '), subject, ...message }, mode);
@@ -77,7 +76,7 @@ export default function ClosureOutlookModal({ closure, user, onClose, onPrepare,
     <form onSubmit={(event) => { event.preventDefault(); prepare(); }}><div className="filter-fields closure-email-fields"><label>Para<input value={to} onChange={(e) => setTo(e.target.value)} disabled={busy} autoFocus required /></label><label>CC<input value={cc} onChange={(e) => setCc(e.target.value)} disabled={busy} /></label></div>
       <label className="outlook-field">Assunto<input value={subject} onChange={(e) => setSubject(e.target.value)} disabled={busy} required /></label>
       <label className="outlook-field">Mensagem<textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={busy} required rows={8} /></label>
-      <p className="closure-email-help"><strong>Pagamento: {paymentDateLabel()}</strong> · sempre no dia seguinte, em dias corridos, pelo horário de Manaus. O nome acima vem do motorista deste fechamento.</p>
+      <p className="closure-email-help">A data sugerida é o dia seguinte, pelo horário de Manaus. Você pode alterar a data diretamente na mensagem.</p>
       <label className="outlook-field">Link “Consultar fretes”<input type="url" value={consultationUrl} onChange={(e) => setConsultationUrl(e.target.value)} disabled={busy || loadingLink} placeholder={loadingLink ? 'Carregando link do painel…' : 'Link do painel de consulta'} /></label>
       {linkMessage && <p className="closure-email-help">{linkMessage}</p>}
       <p className="closure-email-help">A assinatura será a configurada no Outlook. As alterações acima valem para esta mensagem; os destinatários padrão continuam em “Editar destinatários”.</p>

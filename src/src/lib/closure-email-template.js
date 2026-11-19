@@ -17,19 +17,16 @@ export function closureEmailTemplate(closure, now = new Date()) {
   };
 }
 
-export function prepareClosureMessage(body, consultationUrl, now = new Date()) {
-  const paymentDate = paymentDateLabel(now);
-  let text = String(body || '').replace(/^(Bom dia|Boa tarde|Boa noite)!/i, `${closureEmailGreeting(now)}!`);
-  const datePattern = /((?:programar pagamento|pagamento programado) para\s+)\d{2}\/\d{2}\/\d{4}/gi;
-  if (datePattern.test(text)) text = text.replace(datePattern, `$1${paymentDate}`);
-  else text += `\n\nPagamento programado para ${paymentDate}.`;
+export function prepareClosureMessage(body, consultationUrl) {
+  let text = String(body || '');
+  const paymentDate = text.match(/\b(?:programar pagamento|pagamento programado) para\s+(\d{2}\/\d{2}\/\d{4})\b/i)?.[1] || '';
   let url = String(consultationUrl || '').trim();
   if (url) {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' || parsed.hostname !== 'dde-fretes.vercel.app' || !/^[a-f0-9]{64}$/i.test(parsed.searchParams.get('painel') || '')) throw new Error('Use o link do painel de consulta deste app.');
     url = parsed.href;
   } else {
-    text = text.replace(/^Para mais detalhes, acesse: Consultar fretes\.\s*$/m, '').replace(/\n{3,}/g, '\n\n');
+    text = text.replace(/^Para mais detalhes, acesse: Consultar fretes\.(?:\r?\n(?:\r?\n)?|$)/m, '');
   }
   return { body: text, consultationUrl: url, paymentDate };
 }

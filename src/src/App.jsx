@@ -1611,7 +1611,27 @@ function Closures({ user, tickets, closures, canDelete, onGenerate, onPreview, o
       <ClosingOverview tickets={pendingTickets} onGenerate={onGenerate} />
     </section>
     <section className="panel list-panel"><div className="panel-heading"><div><h2>Aguardando envio por e-mail <span className="subtle-count">{pendingClosures.length}</span></h2><p>Fechamentos já gerados que ainda precisam ser enviados.</p></div></div>
-      {pendingClosures.length ? <div className="table-wrap"><ResponsiveTable><thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead><tbody>{pendingClosures.map((item) => <tr key={item.id}><td><strong>{item.number}</strong></td><td>{item.driver}</td><td>{formatDate(item.start)} – {formatDate(item.end)}</td><td>{item.count}</td><td><strong>{money(item.total)}</strong></td><td className="closure-actions"><button className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} /> Abrir PDF</button><button className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} /> Baixar PDF</button><button className="button primary small-button" onClick={() => onEmail(item)}><Mail size={14} /> Enviar no e-mail</button><button className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} /> Marcar como solicitado</button>{canDelete && <button className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} /> Remover do fechamento</button>}</td></tr>)}</tbody></ResponsiveTable></div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
+      {pendingClosures.length ? <div className="table-wrap">
+        <ResponsiveTable>
+          <thead><tr><th>ID</th><th>MOTORISTA</th><th>PERÍODO</th><th>TICKETS</th><th>VALOR</th><th>AÇÕES</th></tr></thead>
+          <tbody>{pendingClosures.map((item) => <tr key={item.id}>
+            <td><strong>{item.number}</strong></td>
+            <td>{item.driver}</td>
+            <td>{formatDate(item.start)} – {formatDate(item.end)}</td>
+            <td>{item.count}</td>
+            <td><strong>{money(item.total)}</strong></td>
+            <td className="closure-actions pending-closure-actions">
+              <div className="closure-action-group">
+                <button type="button" className="button primary small-button" onClick={() => onEmail(item)}><Mail size={14} aria-hidden="true" /> Enviar no e-mail</button>
+                <button type="button" className="button secondary small-button" onClick={() => onPreview(item)}><FileText size={14} aria-hidden="true" /> Abrir PDF</button>
+                <button type="button" className="button secondary small-button" onClick={() => onDownload(item)}><ArrowDownToLine size={14} aria-hidden="true" /> Baixar PDF</button>
+                <button type="button" className="button secondary small-button" onClick={() => onMarkRequested(item)}><Check size={14} aria-hidden="true" /> Marcar como solicitado</button>
+                {canDelete && <button type="button" className="button delete-button small-button" onClick={() => onDelete(item)}><RefreshCw size={14} aria-hidden="true" /> Remover do fechamento</button>}
+              </div>
+            </td>
+          </tr>)}</tbody>
+        </ResponsiveTable>
+      </div> : <div className="empty-callout"><Check size={18} /><span>Nenhum fechamento aguardando envio.</span></div>}
     </section>
   </>;
 }

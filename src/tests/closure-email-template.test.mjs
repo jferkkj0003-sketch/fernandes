@@ -12,13 +12,6 @@ test('greeting follows Manaus morning, afternoon and evening boundaries regardle
   assert.equal(closureEmailGreeting(new Date('2026-10-24T02:00:00Z')), 'Boa noite');
 });
 
-test('automatic greeting refreshes when preparing later, while a personal greeting stays intact', () => {
-  const body = closureEmailTemplate({ driver: 'ELIAS' }, new Date('2026-10-23T14:00:00Z')).body;
-  assert.ok(body.startsWith('Bom dia!'));
-  assert.ok(prepareClosureMessage(body, '', new Date('2026-10-23T18:00:00Z')).body.startsWith('Boa tarde!'));
-  assert.ok(prepareClosureMessage(body.replace('Bom dia!', 'Olá, equipe!'), '', new Date('2026-10-23T23:00:00Z')).body.startsWith('Olá, equipe!'));
-});
-
 test('each message uses the selected closure driver, never a fixed name or current filter', () => {
   const now = new Date('2026-10-23T17:55:00Z');
   const elias = closureEmailTemplate({ driver: 'ELIAS ALVES DA MOTA' }, now);
@@ -39,16 +32,22 @@ test('tomorrow is a calendar day in Manaus, including weekends, month/year and l
   assert.equal(paymentDateLabel(new Date('2028-02-28T18:00:00Z')), '29/02/2028');
 });
 
-test('preparing an email after midnight refreshes payment day, retaining the driver and actual consultation link', () => {
-  const body = closureEmailTemplate({ driver: 'ELIAS' }, new Date('2026-10-23T18:00:00Z')).body;
+test('preparing a draft preserves the edited greeting and payment date, with the consultation link', () => {
+  const body = closureEmailTemplate({ driver: 'ELIAS' }, new Date('2026-10-23T18:00:00Z')).body
+    .replace('Boa tarde!', 'Olá, equipe!')
+    .replace('24/10/2026', '27/10/2026');
   const url = 'https://dde-fretes.vercel.app/?painel=' + 'a'.repeat(64);
-  const result = prepareClosureMessage(body, url, new Date('2026-10-24T05:00:00Z'));
-  assert.match(result.body, /motorista ELIAS, programar pagamento para 25\/10\/2026/);
-  assert.equal(result.paymentDate, '25/10/2026');
+  const result = prepareClosureMessage(body, url);
+  assert.equal(result.body, body);
+  assert.equal(result.paymentDate, '27/10/2026');
   assert.equal(result.consultationUrl, url);
-  assert.match(result.body, /Consultar fretes\./);
   assert.throws(() => prepareClosureMessage(body, 'javascript:alert(1)'));
-  const missing = prepareClosureMessage(body, '', new Date('2026-10-23T18:00:00Z'));
-  assert.ok(!missing.body.includes('Consultar fretes'));
-  assert.match(missing.body, /motorista ELIAS/);
+  const missing = prepareClosureMessage(body, '');
+  assert.equal(missing.body, body.replace('Para mais detalhes, acesse: Consultar fretes.\n\n', ''));
+  assert.equal(missing.paymentDate, '27/10/2026');
+});
+
+test('a custom message keeps its own wording and spacing without adding a default date', () => {
+  const body = 'Bom dia!\n\n\nPor favor, agendar para segunda-feira.\n\nAtenciosamente.';
+  assert.deepEqual(prepareClosureMessage(body, ''), { body, consultationUrl: '', paymentDate: '' });
 });
