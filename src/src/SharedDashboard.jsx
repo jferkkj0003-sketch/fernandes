@@ -162,7 +162,7 @@ export default function SharedDashboard({ token }) {
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={() => refresh()}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
 
   const presets = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Datas']];
-  const periodLabel = range === 'all' ? 'Todo o período' : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
+  const periodLabel = range === 'all' ? (scope === 'open' ? 'Semana atual' : 'Todo o período') : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
   const situation = [
     ['Em aberto', view.open.ticketCount, view.open.amount, '#10b981'],
     ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b'],
@@ -222,7 +222,7 @@ export default function SharedDashboard({ token }) {
 
       <div className="fx-grid">
         <section className="fx-card fx-open-drivers" aria-label="Valores por motorista">
-          <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? 'Todo período' : 'Período'})</small></h2>
+          <h2 className="fx-h2"><Users size={20} /> Valores por Motorista <small>({range === 'week' ? 'Semana' : range === 'all' ? periodLabel : 'Período'})</small></h2>
           <div className="fx-table">
             <div className="fx-tr fx-th"><span>Motorista</span><span className="t">Tickets</span><span className="w">Peso</span><span>Em carregamento</span><span>Valor total</span></div>
             {view.rows.map((row) => <div key={row.name} className="fx-tr fx-row" style={{ '--c': colorOf(row.name) }}>
