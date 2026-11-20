@@ -413,3 +413,55 @@ tr.is-linked td { background: var(--blue-soft); }
   outline: 2px solid var(--ticket-entry-focus);
   outline-offset: 2px;
 }
+
+/* ========================================================================
+   Sistema visual compartilhado com Rota — aplicado por último para remover
+   a mistura de cartões iOS, painéis sólidos e fundos diferentes.
+   ======================================================================== */
+:root {
+  --freight-brand: #7c3aed;
+  --freight-navy: #171126;
+  --bg: #e7edf6; --bg-2: #f7f9fd;
+  --surface: rgba(255, 255, 255, .64); --surface-solid: #f8faff; --surface-2: rgba(232, 239, 249, .78); --field: rgba(255, 255, 255, .72);
+  --line: rgba(78, 105, 145, .22); --line-2: rgba(68, 100, 149, .42);
+  --text: #17273f; --text-2: #38516f; --muted: #61738d;
+  --blue: #1769e7; --blue-text: #1558bc; --blue-soft: rgba(23, 105, 231, .12);
+  --green: #159462; --green-text: #08764b; --green-soft: rgba(21, 148, 98, .12);
+  --amber: #c77706; --amber-text: #8a5200; --amber-soft: rgba(199, 119, 6, .13);
+  --violet: #7c3aed; --violet-text: #6528c8; --violet-soft: rgba(124, 58, 237, .13);
+  --red: #d9485f; --red-text: #ad243d; --red-soft: rgba(217, 72, 95, .11);
+  --glass-blur: blur(18px) saturate(135%); --shadow: 0 12px 28px rgba(39, 65, 104, .09); color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0b1425; --bg-2: #121d31;
+  --surface: rgba(21, 33, 54, .70); --surface-solid: #152136; --surface-2: rgba(44, 61, 91, .55); --field: rgba(14, 27, 47, .72);
+  --line: rgba(166, 189, 224, .18); --line-2: rgba(166, 189, 224, .34);
+  --text: #f4f7ff; --text-2: #c8d5ea; --muted: #98abc5;
+  --blue: #438cff; --blue-text: #8abbff; --blue-soft: rgba(67, 140, 255, .17);
+  --green: #23bd78; --green-text: #71dfa8; --green-soft: rgba(35, 189, 120, .16);
+  --amber: #e5961a; --amber-text: #ffc269; --amber-soft: rgba(229, 150, 26, .16);
+  --violet: #9a61f5; --violet-text: #c8a8ff; --violet-soft: rgba(154, 97, 245, .18);
+  --red: #f06d80; --red-text: #ffacb7; --red-soft: rgba(240, 109, 128, .16);
+  --shadow: 0 14px 34px rgba(0, 0, 0, .22); color-scheme: dark;
+}
+body::before { background: radial-gradient(920px 460px at 100% -8%, rgba(92, 137, 233, .23), transparent 62%), radial-gradient(720px 420px at -8% 8%, rgba(124, 58, 237, .12), transparent 60%), linear-gradient(155deg, var(--bg-2), var(--bg) 58%); }
+:root[data-theme="dark"] body::before { background: radial-gradient(900px 440px at 100% -8%, rgba(70, 130, 255, .18), transparent 61%), radial-gradient(760px 420px at -8% 5%, rgba(125, 63, 228, .14), transparent 60%), linear-gradient(155deg, var(--bg-2), var(--bg) 58%); }
+
+/* O menu é a âncora visual, igual ao Controle de Viagens. */
+.sidebar, :root[data-theme="light"] .sidebar { background: linear-gradient(180deg, var(--freight-navy), #130d20 100%); border-right-color: rgba(255, 255, 255, .10); box-shadow: 8px 0 30px rgba(20, 12, 37, .10); }
+.brand-row { padding-bottom: 28px; }.workspace-label { color: #bcb0d3; }
+.nav-item { color: #d7d0e6; border-radius: 13px; font-size: 14.5px; font-weight: 700; }.nav-item:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.nav-item.active { color: #fff; background: linear-gradient(100deg, var(--freight-brand), #9c59e8); border-color: rgba(255, 255, 255, .12); }.nav-item.active svg { color: #fff; }
+.nav-count { background: rgba(255, 255, 255, .20); color: #fff; }.profile-row { border-top-color: rgba(255, 255, 255, .15); }.profile-text span { color: #bcb0d3; }.avatar { background: linear-gradient(145deg, #7e4ae4, #3f76ee); }
+.topbar, :root[data-theme="light"] .topbar { background: rgba(255, 255, 255, .56); border-bottom-color: var(--line); box-shadow: 0 4px 18px rgba(42, 65, 99, .04); }:root[data-theme="dark"] .topbar { background: rgba(14, 24, 42, .60); }.prototype-pill, .top-user, .theme-toggle, .scan-prefetch-pill { background: var(--surface); border: 1px solid var(--line); }
+
+/* Vidro leve e consistência entre painel, cadastro, consulta e relatórios. */
+.panel, .metric-card, .login-card, .invite-card, .consultation-card, .shared-metric, .shared-ranking, .driver-forecast, .shared-card, .overview-chart-card, .fx-card, .fd-card, .fx-kpi, .fd-kpi, .fx-banner, .fx-alert, .fd-alert, .fx-date, .fx-icon-btn, .fd-page .fd-card, .fd-page .fd-kpi, .fd-page .fd-alert { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 18px; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.fd-page, .main-area:has(.fd-page), :root[data-theme="light"] .main-area:has(.fd-page) { background: transparent; }.fd-page { --p-card: var(--surface); --p-card-2: var(--surface-2); --p-bd: var(--line); --p-sep: var(--line); --p-text: var(--text); --p-dim: var(--text-2); --p-mute: var(--muted); --p-field: var(--field); --p-shadow: var(--shadow); }
+.panel, .dash-drivers { padding: 20px; }.metric-card, .fd-page .fd-kpi { border-top: 3px solid var(--c, var(--blue)); }.fd-page .fd-kpi { min-height: 104px; padding: 17px 18px; }.fd-page .fd-kpi-ico, .fx-kpi-ico { background: var(--c, var(--blue)); color: #fff; border-radius: 11px; }
+.button { min-height: 38px; border-radius: 10px; font-weight: 750; }.button.primary, .fd-page .button.primary { background: linear-gradient(180deg, #2f7df3, #1764db); border-color: #1764db; box-shadow: 0 6px 15px rgba(23, 100, 219, .20); }.button.secondary, .row-action { background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text); }.button.secondary:hover:not(:disabled), .row-action:hover:not(:disabled) { border-color: var(--blue); background: var(--blue-soft); }
+input, select, textarea, .search-box, .history-search-field > div, .shared-driver-select, .fd-page .fd-select, .fd-page .fd-period, .fx-field select, .fx-field input { background: var(--field); border-color: var(--line-2); color: var(--text); }
+.dash-presets, .fd-chips, .fd-page .fd-chips, .fx-chips, .dashboard-chart-switch, .shared-range-tabs { background: var(--surface-2); border: 1px solid var(--line); }.dash-presets button.active, .fd-chips button.on, .fd-page .fd-chips button.on, .fx-chips button.on, .dashboard-chart-switch button.active, .shared-range-tabs button.active { background: var(--blue); color: #fff; box-shadow: 0 4px 10px rgba(23, 105, 231, .20); }
+th { color: var(--text-2); border-bottom-color: var(--line-2); } td { color: var(--text); border-bottom-color: var(--line); } tbody tr:hover td, .fx-row:hover, .fd-table tbody tr:hover td { background: var(--blue-soft); }
+@media (max-width: 800px) { .sidebar, :root[data-theme="light"] .sidebar { background: rgba(255, 255, 255, .78); border-top-color: var(--line); box-shadow: 0 -8px 24px rgba(35, 55, 92, .08); }:root[data-theme="dark"] .sidebar { background: rgba(18, 25, 42, .78); }.nav-item { color: var(--muted); font-weight: 700; }.nav-item.active { background: transparent; color: var(--blue); border-color: transparent; }.nav-item.active svg { color: var(--blue); }.nav-item.active::after { display: block; background: var(--blue); } }
+
