@@ -7,7 +7,8 @@ import './theme.css';
 import './modelo.css';
 import './solid-dashboard.css';
 import './glass.css';
-import './consultation-glass.css'; // tema vidro do painel de consulta (sempre por último)
+import './consultation-glass.css'; // tema vidro do painel de consulta
+import './app-glass.css'; // tema vidro do app (sempre por último)
 
 const sharedToken = new URLSearchParams(window.location.search).get('painel');
 const inviteToken = new URLSearchParams(window.location.search).get('convite');
