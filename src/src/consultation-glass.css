@@ -1,0 +1,289 @@
+/* ==========================================================================
+   Controle de Fretes — Consulta (link compartilhado) · tema VIDRO
+   --------------------------------------------------------------------------
+   Camada ÚNICA e isolada: só afeta .fx-page, .shared-stage e o diálogo do
+   ticket. Não mexe no app administrativo (.fd-page continua como está).
+   Importar POR ÚLTIMO em main.jsx (depois de glass.css).
+
+   Receita do vidro:
+     1. fundo colorido (auroras) — sem cor atrás, o blur não aparece;
+     2. superfície translúcida em degradê (branco 10% → 3%);
+     3. backdrop-filter: blur + saturate;
+     4. borda fina clara + brilho interno no topo (efeito de borda biselada);
+     5. sombra suave e longa para dar profundidade.
+   Tudo é controlado pelos tokens --g-* logo abaixo (escuro e claro).
+   ========================================================================== */
+
+/* ---------- tokens ---------- */
+.fx-page, .shared-stage {
+  --g-blur: 22px;
+  --g-sat: 165%;
+  --g-radius: 20px;
+  --g-radius-sm: 12px;
+
+  --g-text: #f3f7ff;
+  --g-text-2: #cfdaf0;
+  --g-mute: #9fb0cc;
+
+  --g-fill: linear-gradient(145deg, rgba(255,255,255,.115) 0%, rgba(255,255,255,.04) 100%);
+  --g-fill-strong: linear-gradient(145deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.07) 100%);
+  --g-fill-flat: rgba(255,255,255,.06);
+  --g-border: rgba(255,255,255,.16);
+  --g-border-soft: rgba(255,255,255,.09);
+  --g-hi: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(255,255,255,.04);
+  --g-shadow: 0 18px 44px -16px rgba(2,8,28,.65), 0 2px 8px rgba(2,8,28,.25);
+  --g-field: rgba(8,16,38,.38);
+
+  --g-blue: #5aa2ff;
+  --g-green: #3ddc9a;
+  --g-amber: #ffb84d;
+  --g-violet: #b18cff;
+  --g-pink: #ff6fae;
+
+  /* sobrescreve os tokens antigos para todo o painel herdar o vidro */
+  --p-card: transparent; --p-card-2: rgba(255,255,255,.07);
+  --p-bd: var(--g-border); --p-sep: var(--g-border-soft);
+  --p-text: var(--g-text); --p-dim: var(--g-text-2); --p-mute: var(--g-mute);
+  --p-field: var(--g-field); --p-accent: #4d94ff; --p-shadow: var(--g-shadow);
+  color: var(--g-text);
+}
+:root[data-theme="light"] .fx-page, :root[data-theme="light"] .shared-stage {
+  --g-text: #13233d;
+  --g-text-2: #2f4566;
+  --g-mute: #5a6f90;
+  --g-fill: linear-gradient(145deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.42) 100%);
+  --g-fill-strong: linear-gradient(145deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.6) 100%);
+  --g-fill-flat: rgba(255,255,255,.5);
+  --g-border: rgba(255,255,255,.85);
+  --g-border-soft: rgba(40,70,120,.12);
+  --g-hi: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.35);
+  --g-shadow: 0 16px 38px -14px rgba(40,70,130,.28), 0 2px 6px rgba(40,70,130,.08);
+  --g-field: rgba(255,255,255,.62);
+  --g-blue: #1d6fe6; --g-green: #0e9a68; --g-amber: #c77700; --g-violet: #7b45e0; --g-pink: #d63a82;
+  --p-card-2: rgba(30,60,110,.07);
+}
+
+/* ---------- fundo: auroras coloridas atrás do vidro ---------- */
+:root:has(.fx-page), :root:has(.shared-stage) { background: #070d1f; }
+:root:has(.fx-page) body, :root:has(.shared-stage) body { background: transparent; }
+:root:has(.fx-page) body::before,
+:root:has(.shared-stage) body::before {
+  background:
+    radial-gradient(760px 640px at 6% 4%,   rgba(132,  76, 255, .85), transparent 64%),
+    radial-gradient(820px 680px at 98% 0%,  rgba( 36, 128, 255, .80), transparent 62%),
+    radial-gradient(720px 620px at 78% 100%, rgba( 14, 200, 176, .55), transparent 64%),
+    radial-gradient(680px 560px at 0% 96%,  rgba(255,  76, 150, .48), transparent 64%),
+    radial-gradient(520px 420px at 50% 48%, rgba( 70,  90, 255, .22), transparent 66%),
+    linear-gradient(160deg, #0b1438, #070d22 55%);
+}
+:root[data-theme="light"]:has(.fx-page), :root[data-theme="light"]:has(.shared-stage) { background: #dfe8fb; }
+:root[data-theme="light"]:has(.fx-page) body::before,
+:root[data-theme="light"]:has(.shared-stage) body::before {
+  background:
+    radial-gradient(640px 520px at 8% 6%,   rgba(160, 120, 255, .55), transparent 62%),
+    radial-gradient(700px 560px at 96% 2%,  rgba( 80, 160, 255, .55), transparent 60%),
+    radial-gradient(620px 520px at 82% 96%, rgba( 70, 220, 200, .40), transparent 62%),
+    radial-gradient(560px 460px at 4% 92%,  rgba(255, 140, 190, .38), transparent 62%),
+    linear-gradient(160deg, #eef3ff, #dfe8fb 55%);
+}
+
+/* ---------- superfícies de vidro ---------- */
+.fx-page .fx-card, .fx-page .fd-card, .fx-page .fx-kpi, .fx-page .fx-banner,
+.fx-page .fx-alert, .fx-page .fx-date, .fx-page .fx-icon-btn,
+.fx-page .fx-chips, .fx-page .fx-field select, .fx-page .fx-date-filter-toggle,
+.shared-stage .shared-card {
+  background: var(--g-fill);
+  border: 1px solid var(--g-border);
+  border-radius: var(--g-radius);
+  box-shadow: var(--g-hi), var(--g-shadow);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+}
+.fx-page .fx-card, .fx-page .fd-card { padding: 22px; }
+.fx-page .fd-card.fd-glass-chart { background: var(--g-fill); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fx-page, .shared-stage { --g-fill: rgba(24,36,66,.92); --g-fill-strong: rgba(34,48,84,.95); }
+  :root[data-theme="light"] .fx-page { --g-fill: rgba(255,255,255,.94); --g-fill-strong: #fff; }
+}
+
+/* ---------- cabeçalho ---------- */
+.fx-page .fx-logo {
+  background: linear-gradient(145deg, rgba(120,170,255,.95), rgba(80,90,255,.85));
+  border: 1px solid rgba(255,255,255,.45); border-radius: 15px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 10px 24px -8px rgba(70,110,255,.7);
+}
+.fx-page .fx-title h1 { color: var(--g-text); font-weight: 800; letter-spacing: -.02em; }
+.fx-page .fx-title h1 small, .fx-page .fx-title p { color: var(--g-mute); }
+.fx-page .fx-date { padding: 8px 16px; border-radius: 14px; }
+.fx-page .fx-date .fx-date-label { color: var(--g-mute); }
+.fx-page .fx-date b { color: var(--g-text); }
+.fx-page .fx-icon-btn { border-radius: 14px; color: var(--g-text); transition: transform .15s, background .2s; }
+.fx-page .fx-icon-btn:hover { background: var(--g-fill-strong); }
+
+/* abas: pílula de vidro com o ativo "aceso" */
+.fx-page .fx-chips { padding: 4px; gap: 4px; border-radius: 16px; background: var(--g-fill-flat); }
+.fx-page .fx-chips button { color: var(--g-text-2); border-radius: 12px; transition: background .2s, color .2s; }
+.fx-page .fx-chips button:hover:not(.on) { background: rgba(255,255,255,.08); opacity: 1; }
+.fx-page .fx-chips button.on {
+  color: #fff; font-weight: 700;
+  background: linear-gradient(145deg, rgba(110,165,255,.95), rgba(70,110,255,.9));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 16px -6px rgba(60,110,255,.8);
+}
+
+/* filtros */
+.fx-page .fx-field > span { color: var(--g-mute); }
+.fx-page .fx-field select, .fx-page .fx-field input {
+  background: var(--g-field); border: 1px solid var(--g-border); color: var(--g-text);
+  border-radius: var(--g-radius-sm); box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
+}
+.fx-page .fx-field select { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.fx-page .fx-field select:focus, .fx-page .fx-field input:focus {
+  outline: 0; border-color: rgba(120,170,255,.9); box-shadow: 0 0 0 3px rgba(90,150,255,.28);
+}
+.fx-page .fx-date-filter-toggle { min-height: 44px; padding: 0 16px; border-radius: 14px; color: var(--g-text-2); font-weight: 600; }
+.fx-page .fx-date-filter-toggle:hover, .fx-page .fx-date-filter-toggle[aria-expanded="true"] { color: var(--g-text); background: var(--g-fill-strong); }
+
+/* banner do fechamento */
+.fx-page .fx-banner { border-left: 1px solid var(--g-border); padding: 16px 20px; }
+.fx-page .fx-banner h2 { color: var(--g-text); }
+.fx-page .fx-banner p { color: var(--g-text-2); }
+.fx-page .fx-banner p span:not(:last-child)::after { content: ""; display: inline-block; width: 4px; height: 4px; margin-left: 18px; vertical-align: middle; border-radius: 50%; background: var(--g-mute); opacity: .7; }
+.fx-page .fx-banner-icon {
+  color: #fff; border-radius: 14px;
+  background: linear-gradient(145deg, rgba(120,170,255,.95), rgba(90,100,255,.85));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 8px 18px -8px rgba(70,110,255,.8);
+}
+
+/* ---------- KPIs ---------- */
+.fx-page .fx-kpis { gap: 14px; }
+.fx-page .fx-kpi { position: relative; overflow: hidden; padding: 18px; border-top: 1px solid var(--g-border); }
+/* brilho colorido no canto, na cor de cada indicador */
+.fx-page .fx-kpi::before {
+  content: ""; display: block !important; position: absolute; right: -40px; top: -50px; width: 150px; height: 150px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--c) 55%, transparent), transparent 68%); opacity: .55; pointer-events: none;
+}
+.fx-page .fx-kpi-ico {
+  width: 38px; height: 38px; border-radius: 12px; color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--c) 92%, #fff), color-mix(in srgb, var(--c) 70%, #000));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 14px -6px var(--c);
+}
+.fx-page .fx-kpi small { color: var(--g-text-2); font-weight: 600; }
+.fx-page .fx-kpi:not(.total) small { color: var(--g-text-2); }
+.fx-page .fx-kpi strong { color: var(--g-text); font-size: 26px; font-weight: 800; letter-spacing: -.025em; text-shadow: 0 1px 12px rgba(0,0,0,.18); }
+:root[data-theme="light"] .fx-page .fx-kpi strong { text-shadow: none; }
+/* card "Total a pagar": vidro azul-violeta, o destaque da tela */
+.fx-page .fx-kpi.total {
+  border: 1px solid rgba(255,255,255,.38);
+  background: linear-gradient(145deg, rgba(86,140,255,.78) 0%, rgba(120,90,255,.62) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 20px 44px -14px rgba(70,100,255,.75);
+}
+.fx-page .fx-kpi.total::before { background: radial-gradient(circle, rgba(255,255,255,.55), transparent 68%); opacity: .5; }
+.fx-page .fx-kpi.total small, .fx-page .fx-kpi.total strong { color: #fff; }
+.fx-page .fx-kpi.total .fx-kpi-ico { background: rgba(255,255,255,.26); box-shadow: inset 0 1px 0 rgba(255,255,255,.5); }
+
+/* ---------- tabela de motoristas ---------- */
+.fx-page .fx-h2, .fx-page .fd-h2 { color: var(--g-text); font-weight: 750; }
+.fx-page .fx-h2 svg, .fx-page .fd-h2 svg { color: var(--g-mute); }
+.fx-page .fx-h2 small, .fx-page .fd-h2 small { color: var(--g-mute); }
+.fx-page .fx-th { color: var(--g-mute); font-weight: 700; letter-spacing: .07em; }
+.fx-page .fx-row { border-top: 1px solid var(--g-border-soft); border-radius: 14px; transition: background .2s; }
+.fx-page .fx-row:hover { background: var(--g-fill-flat); }
+.fx-page .fx-row .nm b, .fx-page .fx-row .c, .fx-page .fx-row .t, .fx-page .fx-row .w { color: var(--g-text); }
+.fx-page .fx-row .nm small { color: var(--g-mute); }
+.fx-page .fx-row .a { color: var(--g-amber); }
+.fx-page .fx-avatar {
+  color: #fff; font-weight: 800;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--c) 95%, #fff), color-mix(in srgb, var(--c) 65%, #000));
+  border: 1px solid rgba(255,255,255,.4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 14px -6px var(--c);
+}
+.fx-page .fx-ticket-open {
+  background: var(--g-fill-flat); border: 1px solid var(--g-border); color: var(--g-text); border-radius: 10px;
+  box-shadow: var(--g-hi); transition: background .2s, border-color .2s;
+}
+.fx-page .fx-ticket-open:hover { background: rgba(120,170,255,.22); border-color: rgba(140,185,255,.8); }
+.fx-page .fx-total-bar, .fx-page .fx-total-row { border-top: 1px solid var(--g-border); color: var(--g-text); }
+.fx-page .fx-total-bar { background: var(--g-fill-flat); border-radius: 14px; margin-top: 8px; }
+.fx-page .fx-total-bar .a { color: var(--g-amber); }
+
+/* situação das cargas */
+.fx-page .fx-situation li { border-top: 1px solid var(--g-border-soft); color: var(--g-text-2); }
+.fx-page .fx-situation li:first-child { border-top: 0; }
+.fx-page .fx-situation em { color: var(--g-mute); }
+.fx-page .fx-situation b { color: var(--g-text); }
+.fx-page .fx-situation i { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, transparent), 0 0 12px currentColor; }
+
+/* avisos */
+.fx-page .fx-alert { border-radius: 16px; }
+.fx-page .fx-alert p { color: var(--g-text-2); }
+.fx-page .fx-alert.warn { background: linear-gradient(145deg, rgba(255,184,77,.22), rgba(255,184,77,.07)); border-color: rgba(255,200,110,.45); }
+.fx-page .fx-alert.warn svg, .fx-page .fx-alert.warn strong { color: var(--g-amber); }
+.fx-page .fx-alert.info { background: linear-gradient(145deg, rgba(61,220,154,.2), rgba(61,220,154,.06)); border-color: rgba(90,235,175,.4); }
+.fx-page .fx-alert.danger { background: linear-gradient(145deg, rgba(255,90,110,.24), rgba(255,90,110,.08)); border-color: rgba(255,130,145,.5); color: #ffb3bd; }
+:root[data-theme="light"] .fx-page .fx-alert.danger { color: #a3202f; }
+
+.fx-page .fx-note, .fx-page .fx-footer, .fx-page .fx-empty { color: var(--g-mute); }
+
+/* ---------- gráficos ---------- */
+.fx-page .fd-glass-chart { padding: 22px; }
+.fx-page .fd-hbar .n { color: var(--g-text-2); }
+.fx-page .fd-hbar b { color: var(--g-text); }
+.fx-page .fd-glass-chart .fd-hbar .track {
+  height: 12px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.28);
+}
+:root[data-theme="light"] .fx-page .fd-glass-chart .fd-hbar .track { background: rgba(30,60,110,.1); box-shadow: inset 0 1px 3px rgba(30,60,110,.18); }
+.fx-page .fd-glass-chart .fd-hbar .track i {
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bar-color) 70%, #fff), var(--bar-color) 55%, color-mix(in srgb, var(--bar-color) 80%, #000)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 0 14px -2px var(--bar-color);
+}
+.fx-page .fd-glass-chart .track i::after { display: none; }
+
+/* rosca de peso: anel colorido + miolo de vidro */
+.fx-page .fx-weight-ring { filter: drop-shadow(0 8px 18px rgba(0,0,0,.28)); }
+.fx-page .fx-weight-ring > div {
+  width: 74%; color: var(--g-text);
+  background: linear-gradient(145deg, rgba(40,58,110,.96), rgba(16,26,58,.96));
+  border: 1px solid var(--g-border);
+  box-shadow: var(--g-hi);
+}
+:root[data-theme="light"] .fx-page .fx-weight-ring > div { background: linear-gradient(145deg, #fff, rgba(244,248,255,.95)); }
+.fx-page .fx-weight-ring small, .fx-page .fx-weight-legend small { color: var(--g-mute); }
+.fx-page .fx-weight-legend li { color: var(--g-text-2); }
+.fx-page .fx-weight-legend li + li { border-top: 1px solid var(--g-border-soft); }
+.fx-page .fx-weight-legend strong { color: var(--g-text); }
+.fx-page .fx-weight-legend i { box-shadow: 0 0 10px currentColor; }
+
+/* ---------- diálogo do ticket (vidro mais opaco p/ leitura) ---------- */
+.fx-page dialog.fx-ticket-dialog {
+  background: linear-gradient(145deg, rgba(40,56,100,.78), rgba(18,28,60,.82));
+  border: 1px solid rgba(255,255,255,.22); border-radius: 26px; color: var(--g-text);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 40px 90px -20px rgba(0,0,0,.7);
+  -webkit-backdrop-filter: blur(34px) saturate(170%); backdrop-filter: blur(34px) saturate(170%);
+}
+:root[data-theme="light"] .fx-page dialog.fx-ticket-dialog { background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(240,246,255,.82)); }
+.fx-page dialog.fx-ticket-dialog::backdrop { background: rgba(6,10,30,.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.fx-page .ticket-detail-grid > div, .fx-page .fx-ticket-picker { background: var(--g-fill-flat); border: 1px solid var(--g-border); border-radius: 14px; box-shadow: var(--g-hi); }
+.fx-page .fx-ticket-pages button, .fx-page .ticket-detail-actions .button {
+  background: var(--g-fill-flat); border: 1px solid var(--g-border); color: var(--g-text); border-radius: 10px;
+}
+
+/* ---------- tela de carregamento / erro ---------- */
+.shared-stage .shared-card { padding: 32px; border-radius: 24px; color: var(--g-text); text-align: center; }
+.shared-stage .shared-card p { color: var(--g-text-2); }
+
+/* ---------- celular ---------- */
+@media (max-width: 800px) {
+  .fx-page { --g-blur: 16px; }
+  .fx-page .fx-card, .fx-page .fd-card, .fx-page .fd-glass-chart { padding: 16px; border-radius: 18px; }
+  .fx-page .fx-kpi { padding: 14px; }
+  .fx-page .fx-kpi strong, .fx-page .fx-kpi.total strong { font-size: 21px; }
+  .fx-page .fx-kpi.total strong { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .fx-page * { transition: none !important; } }
+/* sem transparência (modo economia / contraste alto) */
+@media (prefers-reduced-transparency: reduce) {
+  .fx-page, .shared-stage { --g-fill: #18253f; --g-fill-strong: #22324f; --g-blur: 0px; }
+  :root[data-theme="light"] .fx-page { --g-fill: #fff; --g-fill-strong: #fff; }
+}
