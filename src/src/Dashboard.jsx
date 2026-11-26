@@ -131,17 +131,6 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     open: buildSeries(scoped, (record) => record.status === 'open' ? record.amount : 0),
   }), [scoped]);
 
-  // Faixa do fluxo: lançar → fechar → solicitar → pagar.
-  const openAmount = records.filter((record) => record.status === 'open' && (driverFilter === 'Todos' || record.key === driverFilter)).reduce((sum, record) => sum + record.amount, 0);
-  const requestedClosures = closures.filter((closure) => closure.status === 'Solicitado' && !closure.paidAt);
-  const paidClosures = closures.filter((closure) => closure.paidAt);
-  const flow = [
-    { n: '01', step: 'Lançar', big: openCount, unit: openCount === 1 ? 'ticket' : 'tickets', title: 'em aberto para fechar', foot: openAmount ? `${money(openAmount)} a fechar` : 'Nenhum valor em aberto', page: 'tickets' },
-    { n: '02', step: 'Fechar', big: waitingClosures.length, unit: waitingClosures.length === 1 ? 'fechamento' : 'fechamentos', title: 'aguardando envio ao financeiro', foot: `Fechamento: Qui, ${brShort(thursday)}`, page: 'fechamentos' },
-    { n: '03', step: 'Solicitar', big: requestedClosures.length, unit: requestedClosures.length === 1 ? 'solicitação' : 'solicitações', title: 'enviadas, aguardando pagamento', foot: noDateClosures.length ? `${noDateClosures.length} sem data de pagamento` : 'Todas com data de pagamento', page: 'solicitacoes' },
-    { n: '04', step: 'Pagar', big: paidClosures.length, unit: paidClosures.length === 1 ? 'pago' : 'pagos', title: 'fechamentos quitados', foot: `Próximo pagamento: Sex, ${brShort(friday)}`, page: 'solicitacoes' },
-  ];
-
   const chips = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Personalizado']];
 
   return <div className="fd-page">
@@ -159,16 +148,6 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       </div>
       {range === 'custom' && <div className="fd-dates"><label>De<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => setCustomStart(event.target.value)} /></label><label>Até<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
       {invalidRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
-    </section>
-
-    <section className="flow" aria-label="Fluxo da operação">
-      {flow.map((item) => <button key={item.n} type="button" className="flow-step mirror" onClick={() => goTo(item.page)}>
-        <span className="mirror-gloss" aria-hidden="true" />
-        <span className="flow-tag"><i>{item.n}</i>{item.step}</span>
-        <span className="flow-big"><b>{item.big.toLocaleString('pt-BR')}</b><small>{item.unit}</small></span>
-        <span className="flow-title">{item.title}</span>
-        <span className="flow-foot">{item.foot}</span>
-      </button>)}
     </section>
 
     <section className="kpis" aria-label="Indicadores do período">
