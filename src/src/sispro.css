@@ -232,9 +232,6 @@ tbody tr:hover td { background: rgba(240, 90, 31, .05); }
   border-radius: 24px; background: var(--navy); border-top: 4px dashed var(--orange); box-shadow: 0 22px 36px -26px rgba(27, 34, 85, .85);
 }
 :root[data-theme="dark"] .flow { background: #151b47; box-shadow: 0 22px 36px -26px rgba(0, 0, 0, .9); }
-@supports (-webkit-box-reflect: below 0) { /* reflexo no "chão", onde o navegador suporta */
-  .flow { margin-bottom: 34px; -webkit-box-reflect: below 6px linear-gradient(to bottom, transparent 86%, rgba(255, 255, 255, .12)); }
-}
 .flow-step {
   position: relative; display: grid; align-content: start; gap: 6px; min-height: 168px; padding: 18px 24px 18px; text-align: left; cursor: pointer;
   color: #fff; border: 1px solid rgba(255, 255, 255, .06); border-radius: 18px; background: rgba(255, 255, 255, .045);
@@ -342,7 +339,6 @@ tbody tr:hover td { background: rgba(240, 90, 31, .05); }
 @media (max-width: 1100px) {
   .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .flow-step:nth-child(2n)::after { display: none; }
-  @supports (-webkit-box-reflect: below 0) { .flow { margin-bottom: 0; -webkit-box-reflect: none; } }
 }
 @media (max-width: 800px) {
   .sidebar, :root[data-theme="light"] .sidebar { width: auto; padding: 0 4px env(safe-area-inset-bottom); background: var(--navy); background-image: none; }
@@ -377,3 +373,15 @@ tbody tr:hover td { background: rgba(240, 90, 31, .05); }
 @media (hover: none) { /* celular: o gráfico abre ao tocar no cartão */
   .kpi:hover { transform: none; }
 }
+
+/* ---------- cartões de indicadores em azul-marinho (mesma cor da faixa) ---------- */
+.kpi { background: var(--navy); border-color: rgba(255, 255, 255, .08); color: #fff; box-shadow: 0 22px 36px -26px rgba(27, 34, 85, .85); }
+:root[data-theme="dark"] .kpi { background: #151b47; }
+.kpi .mirror-gloss { --gloss-top: rgba(255, 255, 255, .09); --gloss-spot: rgba(255, 255, 255, .22); --gloss-streak: rgba(255, 255, 255, .22); --gloss-edge: rgba(255, 255, 255, .2); }
+.kpi-label, .kpi-value { color: #fff; }
+.kpi-value small, .kpi-hint { color: #aab0dd; }
+.kpi-foot { color: #98a0d6; }
+.kpi.tone-orange .kpi-value, :root[data-theme="dark"] .kpi.tone-orange .kpi-value { color: var(--orange-3); }
+.kpi:hover, .kpi:focus-within { border-color: rgba(240, 90, 31, .7); box-shadow: 0 24px 34px -22px rgba(15, 20, 56, .9); }
+.kpi-pop { background: linear-gradient(172deg, #323c8c 0%, #232b66 55%, var(--navy-ink) 100%); border-color: rgba(240, 90, 31, .45); }
+.kpi-pop::after { background: #323c8c; border-top-color: rgba(240, 90, 31, .45); border-left-color: rgba(240, 90, 31, .45); }
