@@ -231,7 +231,7 @@ export default function SharedDashboard({ token }) {
       <section className="fx-kpis" aria-label="Indicadores do fechamento em aberto">
         <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
         <DriverBreakdown label="Peso" rows={view.rows} field="weight" format={fmtWeight} colorOf={colorOf} color="#8b5cf6"><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></DriverBreakdown>
-        <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
+        <DriverBreakdown label="Em aberto" rows={view.open.ranked.map((row) => ({ name: row.driver, amount: row.amount }))} field="amount" format={money} colorOf={colorOf} color="#10b981"><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></DriverBreakdown>
         <div className="fx-kpi" style={{ '--c': '#f59e0b' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><small>Aguardando Ticket</small><strong>{money(view.preview.amount)}</strong></div>
         <DriverBreakdown label="Total a pagar" rows={view.rows} field="payable" format={money} colorOf={colorOf} color="#ec4899" className="total"><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar</small><strong>{money(view.payable.amount)}</strong></DriverBreakdown>
       </section>
