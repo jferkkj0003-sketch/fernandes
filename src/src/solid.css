@@ -224,7 +224,8 @@ tr.is-linked td, .pending-list li.is-linked { background: var(--blue-soft); }
 .fx-icon-btn { color: var(--text-2); }
 .fx-footer, .fx-note, .fx-empty { color: var(--muted); }
 :root:root :is(.fd-hbar .track, .shared-ranking-track, .shared-chart-track) { background: var(--surface-2) !important; border-radius: 999px; }
-:root:root :is(.fd-hbar .track i, .shared-ranking-track span, .shared-chart-track span, .dashboard-bar-fill) { background: var(--s1) !important; background-image: none !important; box-shadow: none; filter: none; border-radius: 999px; }
+:root:root :is(.shared-ranking-track span, .shared-chart-track span, .dashboard-bar-fill) { background: var(--s1) !important; background-image: none !important; box-shadow: none; filter: none; border-radius: 999px; }
+:root:root .fd-hbar .track i { background: var(--bar-color, var(--s1)) !important; background-image: none !important; box-shadow: none; filter: none; border-radius: 999px; }
 :root:root :is(.shared-ranking-track span.violet, .dashboard-bar-fill.violet) { background: var(--s4) !important; }
 :root:root .shared-ranking-track span.green { background: var(--s2) !important; }
 .fd-vchart .barwrap > i { filter: none; box-shadow: none; border-radius: 6px 6px 2px 2px; }
