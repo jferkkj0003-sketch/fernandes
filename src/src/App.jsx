@@ -270,7 +270,7 @@ async function getClosureConsultationLink() {
 
 export default function App() {
   const [page, setPage] = useState('painel');
-  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
   const [tickets, setTickets] = useState(initialTickets);
   const [drivers, setDrivers] = useState(initialDrivers);
   const [query, setQuery] = useState('');

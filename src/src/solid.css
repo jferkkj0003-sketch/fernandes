@@ -1,0 +1,262 @@
+/* ==========================================================================
+   Controle de Fretes — aparência sólida e neutra.
+   Importar POR ÚLTIMO (substitui glass.css, consultation-glass.css, app-glass.css
+   e solid-dashboard.css).
+
+   Regras do visual:
+   • superfícies planas e opacas; sem vidro, sem degradê, sem brilho, sem sombra;
+   • paleta neutra (cinza-tinta) com UMA cor de destaque escura para ações;
+   • bordas de 1 px e cantos pequenos (6–8 px); tabelas e listas simples;
+   • gráficos em tons de cinza (variáveis --s1 … --s8), identificados por rótulo;
+   • vermelho só para exclusão e erro.
+   Para trocar a cor de destaque, altere --accent nos dois temas abaixo.
+   ========================================================================== */
+
+:root, :root[data-theme="light"] {
+  --accent: #1f2a37; --on-accent: #ffffff; --accent-hover: #111827;
+  --bg: #f4f5f7; --bg-2: #f4f5f7;
+  --surface: #ffffff; --surface-solid: #ffffff; --surface-2: #f4f5f7; --field: #ffffff;
+  --line: #e2e5e9; --line-2: #cdd2d8;
+  --text: #171c22; --text-2: #3b434d; --muted: #66707b;
+
+  --blue: var(--accent); --blue-text: #1f2a37; --blue-soft: #eceff2;
+  --green: #3e4c59; --green-text: #3b434d; --green-soft: #eceff2;
+  --amber: #52606d; --amber-text: #3b434d; --amber-soft: #eceff2;
+  --violet: #616e7c; --violet-text: #3b434d; --violet-soft: #eceff2;
+  --red: #a4262c; --red-text: #a4262c; --red-soft: #f8ecec;
+
+  --s1: #1f2a37; --s2: #7b8794; --s3: #3e4c59; --s4: #aab4be; --s5: #52606d; --s6: #cbd2d9; --s7: #616e7c; --s8: #8a96a3;
+
+  --p-card: #ffffff; --p-card-2: #f4f5f7; --p-bd: #e2e5e9; --p-sep: #e2e5e9;
+  --p-text: #171c22; --p-dim: #3b434d; --p-mute: #66707b; --p-field: #ffffff;
+  --p-accent: var(--accent); --p-accent-2: var(--accent);
+  --s-open: #1f2a37; --s-wait: #7b8794; --s-closed: #3e4c59; --s-req: #aab4be; --s-pink: #52606d;
+  --p-shadow: none; --shadow: none;
+  --radius: 8px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --accent: #e8ecf0; --on-accent: #14181c; --accent-hover: #ffffff;
+  --bg: #14171a; --bg-2: #14171a;
+  --surface: #1c2024; --surface-solid: #1c2024; --surface-2: #23282d; --field: #14171a;
+  --line: #2c3238; --line-2: #3b434b;
+  --text: #eceff2; --text-2: #c5ccd3; --muted: #8e98a3;
+
+  --blue: var(--accent); --blue-text: #e8ecf0; --blue-soft: #2a3036;
+  --green: #b8c0c9; --green-text: #c5ccd3; --green-soft: #2a3036;
+  --amber: #9aa4af; --amber-text: #c5ccd3; --amber-soft: #2a3036;
+  --violet: #8e98a3; --violet-text: #c5ccd3; --violet-soft: #2a3036;
+  --red: #e5767c; --red-text: #ee9a9f; --red-soft: #35222a;
+
+  --s1: #e8ecf0; --s2: #7b8794; --s3: #b8c0c9; --s4: #555f6b; --s5: #9aa4af; --s6: #3e4650; --s7: #d2d8de; --s8: #697380;
+
+  --p-card: #1c2024; --p-card-2: #23282d; --p-bd: #2c3238; --p-sep: #2c3238;
+  --p-text: #eceff2; --p-dim: #c5ccd3; --p-mute: #8e98a3; --p-field: #14171a;
+  --s-open: #e8ecf0; --s-wait: #7b8794; --s-closed: #b8c0c9; --s-req: #555f6b; --s-pink: #9aa4af;
+  color-scheme: dark;
+}
+
+/* modelo.css redefine os --p-* dentro de .fx-page/.fd-page; refaz aqui, no mesmo escopo, para herdar o neutro */
+:root .fx-page, :root .fd-page, :root .shared-stage, :root[data-theme="light"] .fx-page, :root[data-theme="light"] .fd-page {
+  --p-card: #ffffff; --p-card-2: #f4f5f7; --p-bd: #e2e5e9; --p-sep: #e2e5e9;
+  --p-text: #171c22; --p-dim: #3b434d; --p-mute: #66707b; --p-field: #ffffff;
+  --p-accent: var(--accent); --p-accent-2: var(--accent); --p-shadow: none;
+  --s-open: #1f2a37; --s-wait: #7b8794; --s-closed: #3e4c59; --s-req: #aab4be; --s-pink: #52606d;
+}
+:root[data-theme="dark"] .fx-page, :root[data-theme="dark"] .fd-page, :root[data-theme="dark"] .shared-stage {
+  --p-card: #1c2024; --p-card-2: #23282d; --p-bd: #2c3238; --p-sep: #2c3238;
+  --p-text: #eceff2; --p-dim: #c5ccd3; --p-mute: #8e98a3; --p-field: #14171a;
+  --s-open: #e8ecf0; --s-wait: #7b8794; --s-closed: #b8c0c9; --s-req: #555f6b; --s-pink: #9aa4af;
+}
+
+/* ---- base: sem efeitos ------------------------------------------------------- */
+:root { --font: "Segoe UI", system-ui, -apple-system, Inter, Roboto, Arial, sans-serif; font-family: var(--font); }
+html, body { background: var(--bg); }
+body::before, body::after { display: none !important; }
+.main-area, .main-area:has(.fd-page), :root .main-area { background: transparent; }
+*, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; text-shadow: none !important; }
+*:not(:focus):not(:focus-visible):not(:focus-within) { box-shadow: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus, select:focus, textarea:focus, .search-box:focus-within { border-color: var(--accent); box-shadow: none !important; outline: 2px solid var(--accent); outline-offset: 0; }
+::selection { background: var(--accent); color: var(--on-accent); }
+
+/* ---- superfícies ----------------------------------------------------------------- */
+:root:root :is(.panel, .metric-card, .login-card, .invite-card, .consultation-card, .shared-metric, .shared-ranking, .shared-card, .overview-chart-card,
+  .driver-forecast, .fx-card, .fd-card, .fx-kpi, .fd-kpi, .fx-banner, .fx-alert, .fd-alert, .fx-date, .fx-icon-btn, .kpi, .dash-pay, .dash-summary,
+  .dash-driver, .cx-hero, .edit-modal, dialog, .fx-ticket-dialog, .notice, .empty-callout, .closure-action, .closure-edit-ticket, .ticket-history-entry,
+  .ticket-scan-field, .driver-forecast-row, .operator-account-row, .outlook-setup, .outlook-repeat, .account-share-url, .cx-attn, .cx-card) {
+  background: var(--surface) !important; background-image: none !important; border: 1px solid var(--line); border-radius: var(--radius);
+}
+:root:root :is(.sidebar, .topbar) { background: var(--surface) !important; background-image: none !important; border-color: var(--line); }
+.modal-backdrop, dialog::backdrop { background: rgba(10, 14, 18, .5); }
+:root:root :is(.ticket-detail-grid > div, .preview-driver-grid div, .dash-pay-split > div, .fx-ticket-picker) { background: var(--surface-2) !important; border: 1px solid var(--line); border-radius: 6px; }
+
+/* sem barras/faixas coloridas nas bordas */
+.metric-card::before, .fx-kpi::before, .fd-kpi::before, .kpi::before, .fx-banner::before, .page-heading > div:first-child::before { display: none !important; }
+.driver-forecast-row, .driver-forecast-row.color-1, .driver-forecast-row.color-2, .driver-forecast-row.color-3, .outlook-repeat { border-left: 1px solid var(--line); }
+.dash-driver { border-left-color: var(--line); }
+.responsive-table tbody tr.ticket-requested-row, .responsive-table tbody tr.closure-requested-row { border-left-color: var(--line-2); }
+.fd-page .fd-kpi, .fd-page .fd-card { border-top: 1px solid var(--line); }
+
+/* ---- ícones e avatares neutros (as cores vinham de --c inline) ------------------------ */
+:root:root :is(.fd-kpi-ico, .fx-kpi-ico, .fd-total-list .ico, .kpi-icon, .metric-icon, .metric-card > svg, .shared-metric-icon, .dash-avatar, .dash-pay-icon,
+  .dash-summary-icon, .fx-banner-icon, .fx-logo, .cx-av, .fx-avatar, .fd-table .av, .avatar, .driver-forecast-avatar, .invite-success-icon, .heading-icon) {
+  background: var(--surface-2) !important; background-image: none !important; color: var(--text-2) !important; border: 1px solid var(--line) !important; border-radius: 6px; box-shadow: none;
+}
+:root:root :is(.dash-avatar, .cx-av, .fx-avatar, .fd-table .av, .avatar) { border-radius: 50%; font-weight: 600; }
+.fx-page .fd-glass-chart { padding: 20px; }
+
+/* ---- tipografia ----------------------------------------------------------------------- */
+body { letter-spacing: 0; }
+h1, h2, h3, strong, b { font-weight: 600; }
+.page-heading h1 { font-size: clamp(24px, 2.6vw, 30px); font-weight: 600; letter-spacing: -.01em; }
+.page-heading > div:first-child { padding-left: 0; }
+.eyebrow, .workspace-label, .form-step:not(.seg) { display: none; }
+.page-subtitle, label, th, .fx-th { color: var(--muted); }
+label { font-weight: 600; font-size: 13px; }
+th, .fx-th { font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+.fx-kpi strong, .fd-kpi strong, .metric-value, .kpi strong { font-weight: 600; letter-spacing: -.01em; }
+.fx-kpi small, .fd-kpi small, .metric-label { color: var(--muted); font-weight: 500; }
+
+/* ---- botões ------------------------------------------------------------------------------ */
+.button { border-radius: 6px; min-height: 40px; font-weight: 600; letter-spacing: 0; }
+:root:root .button.primary, :root:root .fd-page .button.primary, :root:root .dash-presets button.active {
+  background: var(--accent) !important; background-image: none !important; color: var(--on-accent) !important; border: 1px solid var(--accent) !important;
+}
+.button.primary:hover:not(:disabled) { background: var(--accent-hover) !important; filter: none; transform: none; }
+:root:root .button.secondary { background: var(--surface) !important; border: 1px solid var(--line-2); color: var(--text); }
+.button.secondary:hover:not(:disabled) { background: var(--surface-2) !important; border-color: var(--text-2); }
+:root:root :is(.button.delete-button, .button.danger-action, .danger-action) { background: var(--surface) !important; border: 1px solid var(--red); color: var(--red-text); }
+.row-action { background: var(--surface); border: 1px solid var(--line-2); color: var(--text); border-radius: 6px; }
+.row-action:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-2); }
+.icon-button:hover { background: var(--surface-2); }
+.danger-icon { color: var(--red-text); }
+
+/* ---- campos --------------------------------------------------------------------------------- */
+input, select, textarea, .search-box { background-color: var(--field); border: 1px solid var(--line-2); border-radius: 6px; color: var(--text); }
+:root:root :is(.fx-field select, .fx-field input, .fd-select, .fd-dates input, .fd-period, .fx-period) { background-color: var(--field); border: 1px solid var(--line-2); border-radius: 6px; color: var(--text); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+select option { color: #171c22; background: #fff; }
+
+/* ---- abas / filtros (controle segmentado simples) ----------------------------------------------- */
+:root:root :is(.seg, .fx-chips, .fd-chips, .dashboard-chart-switch, .shared-range-tabs, .dash-presets) {
+  display: inline-flex; gap: 0; padding: 0; background: var(--surface) !important; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; width: fit-content; max-width: 100%;
+}
+:root:root :is(.seg button, .fx-chips button, .fd-chips button, .dashboard-chart-switch button, .shared-range-tabs button, .dash-presets button) {
+  min-height: 36px; padding: 0 14px; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: transparent !important; color: var(--text-2); font-weight: 500; font-size: 14px;
+}
+:root:root :is(.seg button, .fx-chips button, .fd-chips button, .dashboard-chart-switch button, .shared-range-tabs button, .dash-presets button):last-child { border-right: 0; }
+:root:root :is(.seg button.on, .fx-chips button.on, .fd-chips button.on, .dashboard-chart-switch button.active, .shared-range-tabs button.active, .dash-presets button.active) {
+  background: var(--accent) !important; color: var(--on-accent) !important; font-weight: 600;
+}
+.fx-chips button:hover:not(.on), .fd-chips button:hover:not(.on) { background: var(--surface-2) !important; opacity: 1; }
+
+/* ---- menu lateral e topo --------------------------------------------------------------------------- */
+.sidebar { border-right: 1px solid var(--line); }
+.nav-item { border-radius: 6px; color: var(--text-2); font-weight: 500; background: transparent; border: 0; }
+.nav-item:hover { background: var(--surface-2); }
+:root:root .nav-item.active { background: var(--surface-2) !important; color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent) !important; }
+.nav-item.active svg { color: var(--text); }
+:root:root .nav-count { background: var(--accent) !important; color: var(--on-accent); }
+.breadcrumb, .breadcrumb-root { color: var(--muted); }
+:root:root :is(.prototype-pill, .top-user, .theme-toggle, .scan-prefetch-pill) { background: var(--surface) !important; border: 1px solid var(--line); box-shadow: none; }
+.status-dot, .prototype-pill.online .status-dot, .cx-live::before, .cx-live.off::before { background: var(--text-2); box-shadow: none; }
+.prototype-pill.error .status-dot { background: var(--red); }
+.cx-live, .cx-live.off { color: var(--muted); }
+
+/* ---- tabelas / situação --------------------------------------------------------------------------------- */
+td { border-bottom: 1px solid var(--line); color: var(--text); }
+th { border-bottom: 1px solid var(--line-2); }
+tbody tr:hover td, .fx-row:hover, .fd-table tbody tr:hover td { background: var(--surface-2); }
+tr.is-linked td, .pending-list li.is-linked { background: var(--surface-2); }
+:root tr.is-linked td:first-child { box-shadow: inset 3px 0 0 var(--accent) !important; }
+:root:root .status-badge { border-radius: 4px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); font-weight: 600; }
+:root:root .status-badge.pendente { background: var(--surface); }
+:root:root .status-badge.solicitado { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.ticket-requested-row td, .closure-requested-row td { background: var(--surface-2); }
+
+/* ---- avisos ---------------------------------------------------------------------------------------------------- */
+:root:root :is(.fx-alert, .fx-alert.warn, .fx-alert.info, .fd-alert, .notice, .empty-callout.warning-callout) { background: var(--surface-2) !important; border: 1px solid var(--line-2); border-left: 3px solid var(--text-2); }
+:root:root .fx-alert.danger { color: var(--red-text); border-left-color: var(--red); }
+.fx-alert svg, .fx-alert strong, .fx-alert.warn svg, .fx-alert.warn strong { color: var(--text); }
+.fd-alert button { background: var(--surface); border: 1px solid var(--line-2); border-radius: 6px; color: var(--text); }
+.auth-error, .history-filter-error, .dashboard-date-error, .admin-delete-error, .account-share-error, .shared-error { color: var(--red-text); }
+
+/* ---- Painel (app) e Consulta: destaques sem cor ------------------------------------------------------------- */
+:root:root .fx-kpi.total { background: var(--accent) !important; border-color: var(--accent); }
+:root:root .fx-kpi.total, :root:root .fx-kpi.total small, :root:root .fx-kpi.total strong { color: var(--on-accent) !important; }
+:root:root .fx-kpi.total .fx-kpi-ico { background: transparent !important; color: var(--on-accent) !important; border-color: rgba(255, 255, 255, .35) !important; }
+:root[data-theme="dark"] .fx-kpi.total .fx-kpi-ico { border-color: rgba(0, 0, 0, .3) !important; }
+.fx-banner-truck { display: none; }
+.fx-situation li i, .fx-weight-legend i, .overview-legend-row i { box-shadow: none; border-radius: 2px; }
+.fx-date .fx-date-label { color: var(--muted); font-size: 11.5px; }
+.fx-date small, .fx-date.off small { color: var(--muted); }
+.fx-page .fx-row .a, .fx-page .fx-total-bar .a { color: var(--text); }
+.fx-icon-btn { color: var(--text-2); }
+.fx-footer, .fx-note, .fx-empty { color: var(--muted); }
+:root:root :is(.fd-hbar .track, .shared-ranking-track, .shared-chart-track) { background: var(--surface-2) !important; border-radius: 3px; }
+:root:root :is(.fd-hbar .track i, .shared-ranking-track span, .shared-chart-track span, .dashboard-bar-fill) { background: var(--s1) !important; background-image: none !important; box-shadow: none; filter: none; border-radius: 3px; }
+:root:root :is(.shared-ranking-track span.violet, .dashboard-bar-fill.violet) { background: var(--s2) !important; }
+:root:root .shared-ranking-track span.green { background: var(--s3) !important; }
+.fd-vchart .barwrap > i { filter: none; box-shadow: none; border-radius: 3px 3px 0 0; }
+.fx-weight-ring, .overview-donut { filter: none; }
+:root:root :is(.fx-weight-ring > div, .overview-donut > div) { background: var(--surface) !important; }
+.overview-step-chart path[fill-opacity] { fill-opacity: .08; }
+
+/* ---- prévia no lançamento de tickets --------------------------------------------------------------------------- */
+.ticket-form .wide-field-all { grid-column: 1 / -1; }
+.form-hint { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.tp-wrap { display: grid; gap: 10px; }
+.tp-wrap:empty { display: none; }
+.tp-linked, .tp-suggest { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line-2); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--surface-2); }
+.tp-linked > div, .tp-suggest > div { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.tp-linked strong, .tp-suggest strong { font-size: 14px; color: var(--text); }
+.tp-linked small, .tp-suggest small { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.tp-ico { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 6px; background: var(--surface); border: 1px solid var(--line-2); color: var(--text-2); }
+.tp-summary { padding: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.tp-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.tp-pay { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.tp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.tp-grid > div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); min-width: 0; }
+.tp-grid small { font-size: 12px; color: var(--muted); }
+.tp-grid b { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.tp-net { background: var(--accent) !important; border-color: var(--accent) !important; }
+.tp-net small, .tp-net b { color: var(--on-accent); }
+.tp-diff.down b { color: var(--red-text); }
+.tp-warn { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--red-text); font-weight: 600; font-size: 13px; }
+.tp-demo { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+.pending-previews { margin-top: 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.pending-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--line); font-weight: 600; }
+.pending-list { list-style: none; margin: 0; padding: 0; }
+.pending-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.pending-list li:first-child { border-top: 0; }
+.pending-main { display: grid; gap: 2px; min-width: 0; }
+.pending-main b { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pending-main small { color: var(--muted); font-size: 12.5px; }
+.pending-amount { font-weight: 600; white-space: nowrap; }
+.pending-actions { display: flex; align-items: center; gap: 6px; }
+.pending-msg { padding: 8px 14px 12px; font-size: 12.5px; color: var(--muted); }
+
+/* ---- janelas ------------------------------------------------------------------------------------------------------- */
+.edit-modal, dialog { border: 1px solid var(--line-2); border-radius: 8px; }
+
+/* ---- celular ----------------------------------------------------------------------------------------------------------- */
+@media (max-width: 800px) {
+  .sidebar { border-right: 0; border-top: 1px solid var(--line-2); }
+  .nav-item { border-radius: 0; color: var(--muted); }
+  :root:root .nav-item.active { background: transparent !important; box-shadow: none !important; color: var(--text); }
+  .nav-item.active::after { background: var(--accent); box-shadow: none; }
+  .ticket-form { grid-template-columns: 1fr; }
+  .tp-linked, .tp-suggest { flex-wrap: wrap; } .tp-linked .button, .tp-suggest .button { width: 100%; }
+  .tp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tp-net { grid-column: 1 / -1; }
+  .pending-list li { grid-template-columns: minmax(0, 1fr) auto; } .pending-actions { grid-column: 1 / -1; } .pending-actions .button { flex: 1; }
+  .modal-backdrop { place-items: end center; padding: 0; }
+  .edit-modal { border-radius: 8px 8px 0 0; align-self: end; max-height: 92dvh; }
+}
+@media (max-width: 519px) {
+  .fx-open-drivers .fx-row { grid-template-areas: "who c" "who a"; }
+  .fx-open-drivers .fx-row .a { white-space: normal; text-align: right; justify-self: end; max-width: 160px; font-size: 12px; }
+  .fx-open-drivers .fx-row .nm b { overflow: hidden; text-overflow: ellipsis; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

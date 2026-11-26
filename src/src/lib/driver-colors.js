@@ -1,11 +1,10 @@
-const palette = ['#ef4444', '#eab308', '#3083f0', '#15a578', '#a274ed', '#e45785', '#16a9cd', '#8ca624'];
+// Série de gráficos em tons neutros (definidos em solid.css, claro e escuro). Distingue pela tonalidade e pelos rótulos.
+const palette = Array.from({ length: 8 }, (_, index) => `var(--s${index + 1})`);
 
 export function makeDriverColorMap(keys) {
   const uniqueKeys = [...new Set(keys)];
   return new Map(uniqueKeys.map((key, index) => {
-    const extra = index - palette.length;
-    const color = palette[index] || 'hsl(' + ((extra * 137.508 + 42) % 360)
-      + ' ' + (58 + (extra % 3) * 8) + '% ' + (45 + (extra % 4) * 6) + '%)';
+    const color = palette[index % palette.length];
     return [key, color];
   }));
 }

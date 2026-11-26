@@ -33,7 +33,7 @@ function formatModified(value) {
 }
 
 export default function SharedDashboard({ token }) {
-  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -164,10 +164,10 @@ export default function SharedDashboard({ token }) {
   const presets = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Datas']];
   const periodLabel = range === 'all' ? (scope === 'open' ? 'Semana atual' : 'Todo o período') : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
   const situation = [
-    ['Em aberto', view.open.ticketCount, view.open.amount, '#10b981'],
-    ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b'],
-    ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, '#3b82f6'],
-    ['Solicitado', view.requested.count, view.requested.amount, '#8b5cf6'],
+    ['Em aberto', view.open.ticketCount, view.open.amount, 'var(--s1)'],
+    ['Aguardando ticket', view.preview.count, view.preview.amount, 'var(--s4)'],
+    ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, 'var(--s3)'],
+    ['Solicitado', view.requested.count, view.requested.amount, 'var(--s2)'],
   ];
 
   return <main className="fx-page">
