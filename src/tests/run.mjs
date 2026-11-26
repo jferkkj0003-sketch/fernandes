@@ -22,3 +22,5 @@ import './app-update.test.mjs';
 import './closure-email-template.test.mjs';
 import './outlook-preferences.test.mjs';
 import './consultation-period.test.mjs';
+
+import './kpi-series.test.mjs';

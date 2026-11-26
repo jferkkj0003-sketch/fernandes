@@ -1,9 +1,10 @@
+import Brand from './Brand';
 import React, { useEffect, useState } from 'react';
 import { Check, Moon, Sun } from 'lucide-react';
 import { cloudConfigured, redeemOperatorInvite } from './lib/cloud';
 
 export default function InviteSignup({ token }) {
-  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') !== 'light' ? 'dark' : 'light');
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('dde-fretes-theme') === 'dark' ? 'dark' : 'light');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [complete, setComplete] = useState(false);
@@ -35,7 +36,7 @@ export default function InviteSignup({ token }) {
     <button className="icon-button theme-toggle invite-theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'} title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
     <section className="login-card invite-card">
       <p className="eyebrow">CONVITE DE ACESSO</p>
-      <img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Controle de Fretes" />
+      <Brand className="login-logo" stacked />
       {complete ? <>
         <div className="invite-success-icon"><Check size={20} /></div>
         <h1>Conta criada</h1>

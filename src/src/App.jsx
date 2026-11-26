@@ -3,7 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   ArrowDownToLine, ArrowUpRight, BadgeDollarSign, Check, ChevronDown,
   CircleHelp, ClipboardList, CreditCard, Eye, LayoutDashboard, Plus, Pencil,
-  Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw,
+  Mail, Search, Settings2, Truck, Users, X, FileText, Trash2, LogOut, UserRound, Link2, Copy, Sun, Moon, RefreshCw, ChevronRight,
 } from 'lucide-react';
 import {
   clearCloudTicketScanCache, cloudConfigured, supabase, createCloudClosure, createDashboardShare, createOperatorInvite, deleteCloudClosure, setCloudDriverActive, deleteCloudTicket, deleteOperatorAccount, downloadCloudTicketScan, emailForUsername, getCloudAppRole, getDashboardShareLink, getSession, listOperatorAccounts, loadCloudData, loadCloudTicketEditHistory, prefetchCloudTicketScans,
@@ -26,6 +26,7 @@ import { startOutlookHelper } from './lib/outlook-helper';
 import { appErrorMessage } from './lib/app-update';
 import History from './History';
 import Dashboard from './Dashboard';
+import Brand, { BrandMark } from './Brand';
 import { downloadPreferences } from './lib/downloads';
 
 const initialTickets = [
@@ -40,7 +41,7 @@ const initialDrivers = [
 ];
 
 const navItems = [
-  { id: 'painel', label: 'Início', icon: LayoutDashboard },
+  { id: 'painel', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'tickets', label: 'Tickets', icon: ClipboardList },
   { id: 'fechamentos', label: 'Fechamentos', icon: BadgeDollarSign },
   { id: 'solicitacoes', label: 'Histórico', icon: CreditCard },
@@ -980,10 +981,10 @@ export default function App() {
 
   return (
     <div className="app-frame">
-      {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
+      {cloudConfigured && !authReady ? <main className="login-stage"><section className="login-card"><Brand className="login-logo" stacked /><p className="login-copy">Conferindo o acesso à nuvem…</p></section></main> : null}
       {cloudConfigured && authReady && sessionUser && !cloudDataReady ? (
         <main className="login-stage"><section className="login-card">
-          <img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
+          <Brand className="login-logo" stacked />
           <p className="login-copy">{cloudLoadError ? `Não foi possível carregar os dados salvos: ${cloudLoadError}` : 'Carregando seus dados da nuvem.'}</p>
           {cloudLoadError && <button type="button" className="button primary full" onClick={() => window.location.reload()}>Tentar novamente</button>}
           {signOutError && <p className="auth-error" role="alert">{signOutError}</p>}
@@ -993,8 +994,7 @@ export default function App() {
       {authReady && showLogin ? (
         <main className="login-stage">
           <section className="login-card">
-            <p className="eyebrow">CONTROLE DE OPERAÇÃO</p>
-            <img className="login-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
+                        <Brand className="login-logo" stacked />
             <p className="login-copy">Entre para acompanhar lançamentos, fechamentos e solicitações.</p>
             <form className="login-form" onSubmit={async (event) => {
               event.preventDefault();
@@ -1039,13 +1039,13 @@ export default function App() {
         <>
           <aside id="main-navigation" className="sidebar" aria-label="Menu de navegação">
             <div className="brand-row">
-              <img className="brand-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
+              <Brand className="brand-logo" />
             </div>
             <div className="workspace-label">MENU PRINCIPAL</div>
             <nav className="nav-list" aria-label="Menu principal">
               {navItems.filter(({ id }) => id !== 'motoristas' || isAdmin).map(({ id, label, icon: Icon }) => (
                 <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => setPage(id)}>
-                  <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{id === 'tickets' && <span className="nav-count">{tickets.filter((ticket) => ticket.status === 'Aberto').length}</span>}
+                  <Icon size={18} strokeWidth={1.8} /><span>{label}</span><ChevronRight className="nav-chevron" size={16} aria-hidden="true" />{id === 'tickets' && <span className="nav-count">{tickets.filter((ticket) => ticket.status === 'Aberto').length}</span>}
                 </button>
               ))}
             </nav>
@@ -1058,8 +1058,8 @@ export default function App() {
           <main className="main-area">
             <header className="topbar">
               <div className="topbar-left">
-                <img className="topbar-logo" src={theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg'} alt="Gestão de Frete" />
-                <div className="breadcrumb"><span className="breadcrumb-root">Operação <span>/</span></span><strong>{navItems.find((item) => item.id === page)?.label || 'Início'}</strong></div>
+                <span className="topbar-logo"><BrandMark size={34} /></span>
+                <div className="breadcrumb"><span className="breadcrumb-root">Início <span>/</span></span><strong>{navItems.find((item) => item.id === page)?.label || 'Visão geral'}</strong></div>
               </div>
               <div className="topbar-right">
                 <span className={`prototype-pill ${syncState}`}><span className="status-dot amber" /><span className="sync-label">{syncState === 'online' ? 'Nuvem conectada' : syncState === 'connecting' ? 'Conectando à nuvem' : syncState === 'error' ? 'Erro na nuvem' : 'Demonstração local'}</span></span>

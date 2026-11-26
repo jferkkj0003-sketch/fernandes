@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BadgeDollarSign, CalendarDays, ChevronDown, ClipboardList, Hourglass, Plus, Ticket, Truck, Weight } from 'lucide-react';
+import KpiCard from './KpiCard';
+import { buildSeries } from './lib/kpi-series';
 import { supabase } from './lib/cloud';
 import FreightCharts from './ConsultationValueChart';
 import { makeDriverColorMap } from './lib/driver-colors';
@@ -120,11 +122,31 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
     openCount && { color: 'var(--green)', text: `${openCount} ${openCount === 1 ? 'ticket em aberto' : 'tickets em aberto'} · fechamento na quinta, ${brShort(thursday)}`, action: 'Fechar', page: 'fechamentos' },
   ].filter(Boolean);
 
+  // Gráficos que aparecem ao passar o mouse nos indicadores (respeitam os mesmos filtros).
+  const scoped = useMemo(() => invalidRange ? [] : select(period.start, period.end), [records, range, customStart, customEnd, driverFilter, statusFilter, today]);
+  const series = useMemo(() => ({
+    tickets: buildSeries(scoped, (record) => record.status === 'preview' ? 0 : 1),
+    weight: buildSeries(scoped, (record) => record.weight),
+    amount: buildSeries(scoped, (record) => record.amount),
+    open: buildSeries(scoped, (record) => record.status === 'open' ? record.amount : 0),
+  }), [scoped]);
+
+  // Faixa do fluxo: lançar → fechar → solicitar → pagar.
+  const openAmount = records.filter((record) => record.status === 'open' && (driverFilter === 'Todos' || record.key === driverFilter)).reduce((sum, record) => sum + record.amount, 0);
+  const requestedClosures = closures.filter((closure) => closure.status === 'Solicitado' && !closure.paidAt);
+  const paidClosures = closures.filter((closure) => closure.paidAt);
+  const flow = [
+    { n: '01', step: 'Lançar', big: openCount, unit: openCount === 1 ? 'ticket' : 'tickets', title: 'em aberto para fechar', foot: openAmount ? `${money(openAmount)} a fechar` : 'Nenhum valor em aberto', page: 'tickets' },
+    { n: '02', step: 'Fechar', big: waitingClosures.length, unit: waitingClosures.length === 1 ? 'fechamento' : 'fechamentos', title: 'aguardando envio ao financeiro', foot: `Fechamento: Qui, ${brShort(thursday)}`, page: 'fechamentos' },
+    { n: '03', step: 'Solicitar', big: requestedClosures.length, unit: requestedClosures.length === 1 ? 'solicitação' : 'solicitações', title: 'enviadas, aguardando pagamento', foot: noDateClosures.length ? `${noDateClosures.length} sem data de pagamento` : 'Todas com data de pagamento', page: 'solicitacoes' },
+    { n: '04', step: 'Pagar', big: paidClosures.length, unit: paidClosures.length === 1 ? 'pago' : 'pagos', title: 'fechamentos quitados', foot: `Próximo pagamento: Sex, ${brShort(friday)}`, page: 'solicitacoes' },
+  ];
+
   const chips = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Personalizado']];
 
   return <div className="fd-page">
     <div className="page-heading">
-      <div><p className="eyebrow">ACOMPANHAMENTO</p><h1>Painel de Controle</h1><p className="page-subtitle">Visão geral da operação, pesos, tickets e valores</p></div>
+      <div><h1>Visão geral</h1><p className="page-subtitle">Tickets, fechamentos e pagamentos da operação</p></div>
       <button className="button primary" onClick={() => goTo('tickets')}><Plus size={17} /> Novo ticket</button>
     </div>
 
@@ -139,10 +161,21 @@ export default function Dashboard({ tickets, drivers: driverRecords, closures = 
       {invalidRange && <div className="dashboard-date-error" role="alert">A data inicial deve ser anterior ou igual à data final.</div>}
     </section>
 
-    <section className="fd-kpis" aria-label="Indicadores">
-      <div className="fd-kpi" style={{ '--c': '#0A84FF' }}><span className="fd-kpi-ico"><Ticket size={26} /></span><div><small>Total de Tickets</small><strong>{totals.tickets.toLocaleString('pt-BR')}</strong></div></div>
-      <div className="fd-kpi" style={{ '--c': '#BF5AF2' }}><span className="fd-kpi-ico"><Weight size={26} /></span><div><small>Peso Total</small><strong>{formatWeight(totals.weight)}</strong></div></div>
-      <div className="fd-kpi" style={{ '--c': '#30D158' }}><span className="fd-kpi-ico"><BadgeDollarSign size={28} /></span><div><small>Valor Total</small><strong>{money(totals.amount)}</strong></div></div>
+    <section className="flow" aria-label="Fluxo da operação">
+      {flow.map((item) => <button key={item.n} type="button" className="flow-step mirror" onClick={() => goTo(item.page)}>
+        <span className="mirror-gloss" aria-hidden="true" />
+        <span className="flow-tag"><i>{item.n}</i>{item.step}</span>
+        <span className="flow-big"><b>{item.big.toLocaleString('pt-BR')}</b><small>{item.unit}</small></span>
+        <span className="flow-title">{item.title}</span>
+        <span className="flow-foot">{item.foot}</span>
+      </button>)}
+    </section>
+
+    <section className="kpis" aria-label="Indicadores do período">
+      <KpiCard label="Total de tickets" value={totals.tickets.toLocaleString('pt-BR')} unit={totals.tickets === 1 ? 'ticket' : 'tickets'} foot={periodLabel} hint="Tickets lançados no período e filtros escolhidos" series={series.tickets} format={(v) => v.toLocaleString('pt-BR')} />
+      <KpiCard label="Peso total" value={formatWeight(totals.weight).split(' ')[0]} unit={formatWeight(totals.weight).split(' ')[1]} foot={periodLabel} hint="Soma do peso dos tickets" series={series.weight} format={formatWeight} />
+      <KpiCard label="Valor total" value={money(totals.amount)} foot={`${money(totals.preview)} em prévias`} hint="Valor líquido dos tickets mais prévias pendentes" series={series.amount} format={money} />
+      <KpiCard label="Em aberto" value={money(totals.open)} foot={`${openCount.toLocaleString('pt-BR')} ${openCount === 1 ? 'ticket' : 'tickets'} para fechar`} hint="Valor dos tickets ainda sem fechamento" series={series.open} format={money} tone="orange" />
     </section>
 
     {alerts.length > 0 && <section className="fd-alerts" aria-label="Precisa de atenção">

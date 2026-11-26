@@ -1,3 +1,4 @@
+import Brand from './Brand';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, Check, CircleDollarSign, Hourglass, Info, Layers, Moon, RefreshCw, Sun, Ticket, Truck, Users, Weight } from 'lucide-react';
 import { cloudConfigured, loadSharedClosingTicketDetail, loadSharedClosingTickets, loadSharedDashboard } from './lib/cloud';
@@ -157,17 +158,16 @@ export default function SharedDashboard({ token }) {
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [ticketCache, scope, invalidRange, stale, loadError, openDriverKeys]);
 
-  const logo = theme === 'dark' ? '/logo-controle-de-fretes-dark.svg' : '/logo-controle-de-fretes.svg';
-  if (loading) return <main className="shared-stage"><section className="shared-card"><img src={logo} alt="Controle de Fretes" /><p>Carregando painel compartilhado…</p></section></main>;
+  if (loading) return <main className="shared-stage"><section className="shared-card"><Brand stacked /><p>Carregando painel compartilhado…</p></section></main>;
   if (loadError) return <main className="shared-stage"><section className="shared-card"><AlertCircle size={32} /><h1>Link indisponível</h1><p>{loadError}</p><button className="button secondary" onClick={() => refresh()}><RefreshCw size={15} /> Tentar novamente</button></section></main>;
 
   const presets = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Datas']];
   const periodLabel = range === 'all' ? (scope === 'open' ? 'Semana atual' : 'Todo o período') : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
   const situation = [
-    ['Em aberto', view.open.ticketCount, view.open.amount, 'var(--s1)'],
-    ['Aguardando ticket', view.preview.count, view.preview.amount, 'var(--s4)'],
-    ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, 'var(--s3)'],
-    ['Solicitado', view.requested.count, view.requested.amount, 'var(--s2)'],
+    ['Em aberto', view.open.ticketCount, view.open.amount, '#10b981'],
+    ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b'],
+    ['Fechado (a enviar)', view.waiting.count, view.waiting.amount, '#3b82f6'],
+    ['Solicitado', view.requested.count, view.requested.amount, '#8b5cf6'],
   ];
 
   return <main className="fx-page">

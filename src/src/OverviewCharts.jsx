@@ -1,7 +1,7 @@
 import React from 'react';
 import { overviewSeries, stepGeometry } from './lib/overview-charts';
 
-const colors = Array.from({ length: 8 }, (_, index) => `var(--s${index + 1})`);
+const colors = ['#3478ea', '#2a9b72', '#e5a631', '#8b6bd6', '#e16c55', '#28a6b5', '#ce6ba5', '#8291a5'];
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const weight = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg`;
 const dayLabel = (value) => value.slice(5).split('-').reverse().join('/');
@@ -32,9 +32,9 @@ function StepChart({ series, field, title, format, color, id }) {
   const dateTicks = chart.points.filter((_, index, all) => index === 0 || index === all.length - 1 || (all.length > 4 && index % Math.ceil(all.length / 4) === 0));
   return <section className="shared-ranking overview-chart-card"><h2>{title}</h2><p className="shared-payment-description">Acumulado no período · cada degrau representa um dia com movimentação.</p>
     {chart.points.length ? <><svg className="overview-step-chart" viewBox="0 0 620 250" role="img" aria-label={`${title}: ${format(total)} acumulados entre ${dayLabel(series[0].date)} e ${dayLabel(series.at(-1).date)}.`}>
-      
+      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".24" /><stop offset="100%" stopColor={color} stopOpacity=".02" /></linearGradient></defs>
       {[0, .5, 1].map((fraction) => { const value = chart.min + (chart.max - chart.min) * fraction; const y = chart.y(value); return <g key={fraction}><line x1="65" x2="590" y1={y} y2={y} className="overview-grid-line" /><text x="57" y={y + 4} textAnchor="end">{Intl.NumberFormat('pt-BR', { notation:'compact', maximumFractionDigits:1 }).format(value)}</text></g>; })}
-      <path d={chart.area} fill={color} fillOpacity=".08" /><path d={chart.path} fill="none" stroke={color} strokeWidth="3" strokeLinejoin="round" />
+      <path d={chart.area} fill={`url(#${id})`} /><path d={chart.path} fill="none" stroke={color} strokeWidth="3" strokeLinejoin="round" />
       {chart.points.map((point) => <circle key={point.date} cx={point.x} cy={point.y} r="4" fill={color} tabIndex="0" aria-label={`${dayLabel(point.date)}: ${format(point[field])} acumulados`}><title>{dayLabel(point.date)}: {format(point[field])} acumulados</title></circle>)}
       {dateTicks.map((point) => <text key={point.date} x={point.x} y="237" textAnchor="middle">{dayLabel(point.date)}</text>)}
     </svg><div className="overview-chart-total"><span>Total acumulado</span><strong style={{ color }}>{format(total)}</strong></div></> : <p className="shared-empty">Sem movimentação para os filtros selecionados.</p>}
@@ -48,7 +48,7 @@ export default function OverviewCharts({ rows, dailyRows, period, driver }) {
   return <div className="overview-charts-grid">
     <DriverDonut rows={rows} field="amount" title="Valor por motorista" format={money} colorFor={colorFor} />
     <DriverDonut rows={rows} field="weight" title="Peso por motorista" format={weight} colorFor={colorFor} />
-    <StepChart series={series} field="cumulativeAmount" title="Evolução do valor" format={money} color="var(--s1)" id="overview-value-fill" />
-    <StepChart series={series} field="cumulativeWeight" title="Evolução do peso" format={weight} color="var(--s1)" id="overview-weight-fill" />
+    <StepChart series={series} field="cumulativeAmount" title="Evolução do valor" format={money} color="#3478ea" id="overview-value-fill" />
+    <StepChart series={series} field="cumulativeWeight" title="Evolução do peso" format={weight} color="#2a9b72" id="overview-weight-fill" />
   </div>;
 }

@@ -5,7 +5,7 @@ import SharedDashboard from './SharedDashboard.jsx';
 import InviteSignup from './InviteSignup.jsx';
 import './theme.css';
 import './modelo.css';
-import './solid.css'; // aparência sólida e neutra (sempre por último)
+import './sispro.css'; // visual SISPRÓ: menu azul-marinho, laranja, creme e efeito espelho (sempre por último)
 
 const sharedToken = new URLSearchParams(window.location.search).get('painel');
 const inviteToken = new URLSearchParams(window.location.search).get('convite');
