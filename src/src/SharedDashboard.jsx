@@ -24,6 +24,21 @@ const brFull = (iso) => iso.split('-').reverse().join('/');
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 const sum = (list, field) => list.reduce((total, item) => total + (Number(item[field]) || 0), 0);
 
+function DriverBreakdown({ label, rows, field, format, colorOf, children, className = '', color }) {
+  const sorted = [...rows].sort((a, b) => (Number(b[field]) || 0) - (Number(a[field]) || 0));
+  const max = Math.max(0, ...sorted.map((row) => Number(row[field]) || 0));
+  return <div className={`fx-kpi fx-breakdown ${className}`} style={{ '--c': color }} tabIndex={0}>
+    {children}
+    <div className="fx-breakdown-pop" role="group" aria-label={`${label} por motorista`}>
+      <div className="fx-breakdown-title">{label} por motorista</div>
+      {sorted.length ? sorted.map((row) => <div className="fx-breakdown-row" key={row.name}>
+        <span title={row.name}>{row.name}</span><b>{format(row[field])}</b>
+        <div className="fx-breakdown-track"><i style={{ width: `${max ? Math.max(0, Number(row[field]) || 0) / max * 100 : 0}%`, backgroundColor: colorOf(row.name) }} /></div>
+      </div>) : <p>Sem dados para os filtros selecionados.</p>}
+    </div>
+  </div>;
+}
+
 // Data da última modificação (fuso de Manaus), ex.: "18/11/2026 às 08:15".
 function formatModified(value) {
   if (!value) return '';
@@ -163,6 +178,7 @@ export default function SharedDashboard({ token }) {
 
   const presets = [['week', 'Semana'], ['month', 'Mês'], ['all', 'Todo período'], ['custom', 'Datas']];
   const periodLabel = range === 'all' ? (scope === 'open' ? 'Semana atual' : 'Todo o período') : `${period.start ? brFull(period.start) : 'Início'} – ${period.end ? brFull(period.end) : 'hoje'}`;
+  const historyRows = view.overall.ranked.map((row) => ({ name: row.driver, weight: row.weight, amount: row.amount }));
   const situation = [
     ['Em aberto', view.open.ticketCount, view.open.amount, '#10b981'],
     ['Aguardando ticket', view.preview.count, view.preview.amount, '#f59e0b'],
@@ -214,10 +230,10 @@ export default function SharedDashboard({ token }) {
       {scope === 'open' ? <>
       <section className="fx-kpis" aria-label="Indicadores do fechamento em aberto">
         <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
-        <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></div>
+        <DriverBreakdown label="Peso" rows={view.rows} field="weight" format={fmtWeight} colorOf={colorOf} color="#8b5cf6"><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></DriverBreakdown>
         <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></div>
         <div className="fx-kpi" style={{ '--c': '#f59e0b' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><small>Aguardando Ticket</small><strong>{money(view.preview.amount)}</strong></div>
-        <div className="fx-kpi total" style={{ '--c': '#ec4899' }}><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar</small><strong>{money(view.payable.amount)}</strong></div>
+        <DriverBreakdown label="Total a pagar" rows={view.rows} field="payable" format={money} colorOf={colorOf} color="#ec4899" className="total"><span className="fx-kpi-ico"><Check size={22} /></span><small>Total a pagar</small><strong>{money(view.payable.amount)}</strong></DriverBreakdown>
       </section>
 
       <div className="fx-grid">
@@ -261,8 +277,8 @@ export default function SharedDashboard({ token }) {
       </> : <>
         <section className="fx-kpis fx-history-kpis" aria-label="Indicadores do período completo">
           <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Total de tickets</small><strong>{view.overall.ticketCount.toLocaleString('pt-BR')}</strong></div>
-          <div className="fx-kpi" style={{ '--c': '#8b5cf6' }}><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.overall.weight)}</strong></div>
-          <div className="fx-kpi" style={{ '--c': '#10b981' }}><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Valor total</small><strong>{money(view.overall.amount)}</strong></div>
+          <DriverBreakdown label="Peso" rows={historyRows} field="weight" format={fmtWeight} colorOf={colorOf} color="#8b5cf6"><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.overall.weight)}</strong></DriverBreakdown>
+          <DriverBreakdown label="Valor total" rows={historyRows} field="amount" format={money} colorOf={colorOf} color="#10b981"><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Valor total</small><strong>{money(view.overall.amount)}</strong></DriverBreakdown>
         </section>
         <section className="fx-card fx-history-drivers" aria-label="Motoristas no período completo">
           <h2 className="fx-h2"><Users size={20} /> Resumo por motorista <small>({periodLabel})</small></h2>

@@ -182,3 +182,16 @@
   .fx-ticket-picker .fx-field { max-width: none; flex-basis: 100%; }
   .fx-ticket-picker .fx-ticket-pages { flex: 1 0 100%; justify-content: space-between; }
 }
+
+/* Detalhes dos indicadores por motorista na consulta */
+.fx-page .fx-breakdown { position: relative; overflow: visible; cursor: pointer; }
+.fx-page .fx-breakdown:hover, .fx-page .fx-breakdown:focus-within { z-index: 20; }
+.fx-breakdown-pop { position: absolute; z-index: 30; top: 100%; left: 0; width: min(340px, 85vw); max-height: 320px; overflow-y: auto; padding: 16px; border-radius: 14px; background: #20295e; border: 1px solid #59669f; box-shadow: 0 12px 30px rgba(0,0,0,.3); color: white; visibility: hidden; opacity: 0; pointer-events: none; }
+.fx-breakdown:hover .fx-breakdown-pop, .fx-breakdown:focus-within .fx-breakdown-pop { visibility: visible; opacity: 1; pointer-events: auto; }
+.fx-breakdown.total .fx-breakdown-pop, .fx-history-kpis .fx-breakdown:last-child .fx-breakdown-pop { left: auto; right: 0; }
+.fx-breakdown-title { font-weight: 700; margin-bottom: 12px; }
+.fx-breakdown-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px 12px; margin: 10px 0; font-size: 13px; }
+.fx-breakdown-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-breakdown-row b { white-space: nowrap; }
+.fx-breakdown-track { grid-column: 1 / -1; height: 7px; background: #445080; border-radius: 8px; }
+.fx-breakdown-track i { display: block; height: 100%; border-radius: inherit; }

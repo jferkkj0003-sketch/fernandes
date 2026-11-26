@@ -14,7 +14,7 @@ export default function DriverValueChart({ rows, periodLabel, colorFor, title = 
         <span className="n" title={row.name}>{row.name}</span>
         <div className="track" aria-hidden="true"><i style={{
           width: largest ? (Math.abs(row.amount) / largest * 100) + '%' : '0%',
-          '--bar-color': colorFor(row.key),
+          backgroundColor: colorFor(row.key),
         }} /></div>
         <b>{money.format(row.amount)}</b>
       </li>)}
