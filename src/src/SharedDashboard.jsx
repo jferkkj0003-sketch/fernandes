@@ -229,7 +229,7 @@ export default function SharedDashboard({ token }) {
 
       {scope === 'open' ? <>
       <section className="fx-kpis" aria-label="Indicadores do fechamento em aberto">
-        <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></div>
+        <DriverBreakdown label="Tickets Confirmados" rows={view.rows} field="count" format={(value) => (Number(value) || 0).toLocaleString('pt-BR')} colorOf={colorOf} color="#3b82f6"><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Tickets Confirmados</small><strong>{view.confirmed.count.toLocaleString('pt-BR')}</strong></DriverBreakdown>
         <DriverBreakdown label="Peso" rows={view.rows} field="weight" format={fmtWeight} colorOf={colorOf} color="#8b5cf6"><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.confirmed.weight)}</strong></DriverBreakdown>
         <DriverBreakdown label="Em aberto" rows={view.open.ranked.map((row) => ({ name: row.driver, amount: row.amount }))} field="amount" format={money} colorOf={colorOf} color="#10b981"><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Em aberto</small><strong>{money(view.open.amount)}</strong></DriverBreakdown>
         <div className="fx-kpi" style={{ '--c': '#f59e0b' }}><span className="fx-kpi-ico"><Hourglass size={20} /></span><small>Aguardando Ticket</small><strong>{money(view.preview.amount)}</strong></div>
@@ -276,7 +276,7 @@ export default function SharedDashboard({ token }) {
 
       </> : <>
         <section className="fx-kpis fx-history-kpis" aria-label="Indicadores do período completo">
-          <div className="fx-kpi" style={{ '--c': '#3b82f6' }}><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Total de tickets</small><strong>{view.overall.ticketCount.toLocaleString('pt-BR')}</strong></div>
+          <DriverBreakdown label="Total de tickets" rows={view.overall.ranked.map((row) => ({ name: row.driver, count: row.count }))} field="count" format={(value) => (Number(value) || 0).toLocaleString('pt-BR')} colorOf={colorOf} color="#3b82f6"><span className="fx-kpi-ico"><Ticket size={20} /></span><small>Total de tickets</small><strong>{view.overall.ticketCount.toLocaleString('pt-BR')}</strong></DriverBreakdown>
           <DriverBreakdown label="Peso" rows={historyRows} field="weight" format={fmtWeight} colorOf={colorOf} color="#8b5cf6"><span className="fx-kpi-ico"><Weight size={20} /></span><small>Peso total</small><strong>{fmtWeight(view.overall.weight)}</strong></DriverBreakdown>
           <DriverBreakdown label="Valor total" rows={historyRows} field="amount" format={money} colorOf={colorOf} color="#10b981"><span className="fx-kpi-ico"><CircleDollarSign size={20} /></span><small>Valor total</small><strong>{money(view.overall.amount)}</strong></DriverBreakdown>
         </section>
